@@ -1,4 +1,3 @@
-use std::env;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -316,43 +315,43 @@ impl Command {
 }
 
 
-fn open_or_die(filename: &str) -> std::fs::File {
+fn open_or_die(filename: &str) -> Result<std::fs::File, i32> {
     match File::open(filename) {
         Ok(filehandle) => {
-            filehandle
+            Ok(filehandle)
         }
         Err(_) => {
             println!("Couldn't open '{}'", filename);
-            std::process::exit(3)
+            Err(3)
         }
     }
 
 }
 
 
-fn get_input_or_die() -> String {
+fn get_input_or_die() -> Result<String, i32> {
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(_num_bytes) => {
-            input.trim().to_string()
+            Ok(input.trim().to_string())
         }
         Err(_) => {
             println!("Unable to read input");
-            std::process::exit(3)
+            Err(3)
         }
     }
 }
 
 
-fn num_bytes_or_die(open_file: &std::fs::File) -> usize {
+fn num_bytes_or_die(open_file: &std::fs::File) -> Result<usize, i32> {
     let metadata = open_file.metadata();
     match metadata {
         Ok(metadata) => {
-            metadata.len() as usize
+            Ok(metadata.len() as usize)
         }
         Err(_) => {
             println!("Couldn't find file size");
-            std::process::exit(2)
+            Err(2)
         }
     }
 }
@@ -408,32 +407,41 @@ fn print_one_byte(byte:u8) {
 }
 
 
-fn main() {
-    let args = env::args().collect::<Vec<String>>();
+pub fn actual_runtime(filename: &str) -> i32 {
+    let mut file = match open_or_die(&filename) {
+        Ok(file) => {
+            file
+        },
+        Err(errcode) => {
+            return errcode;
+        }
+    };
 
-    if args.len() != 2 {
-        println!("Usage: {} <filename>", args[0]);
-        std::process::exit(1);
-    }
+    let num_bytes = match num_bytes_or_die(&file) {
+        Ok(num_bytes) => {
+            num_bytes
+        },
+        Err(errcode) => {
+            return errcode;
+        }
+    };
 
-    let filename = &args[1];
-    let mut file = open_or_die(&filename);
-    let num_bytes = num_bytes_or_die(&file);
     // TODO calculate based on longest possible index
     let n_padding = "     ";
 
     /* Read all bytes into memory just like real ed */
+    // TODO A real hex editor needs to buffer
     let mut all_bytes = Vec::new();
     match file.read_to_end(&mut all_bytes) {
         Err(_) => {
             println!("Couldn't read {}", filename);
-            std::process::exit(4);
+            return 4;
         },
         Ok(num_bytes_read) => {
             if num_bytes_read != num_bytes {
                 println!("Only read {} of {} bytes of {}", num_bytes_read,
                         num_bytes, filename);
-                std::process::exit(5);
+                return 5;
             }
         }
     }
@@ -446,9 +454,16 @@ fn main() {
 
     println!("? for help\n\n0x{:x}", index);
     loop {
+
         print!("*");
         io::stdout().flush().unwrap();
-        let input = get_input_or_die();
+        let input = match get_input_or_die() {
+            Ok(input) => input,
+            Err(errcode) => {
+                return errcode;
+            }
+        };
+
         if let Some(command) = Command::from_index_and_line(index, &input, max_index) {
             // println!("0x{:?}", command);
             match command.command {
@@ -487,7 +502,9 @@ fn main() {
                             None, width);
                     index = command.range.1;
                 },
-                'q' => std::process::exit(0),
+                'q' => {
+                    return 0
+                },
                 'W' => {
                     width = if command.range.0 > 0 {
                         Some(command.range.0)

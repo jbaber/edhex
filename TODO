@@ -4,3 +4,4 @@
 - Separate library from binary
 - Read from STDIN
 - docs.rs documentation
+- Implement /
