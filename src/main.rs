@@ -23,6 +23,8 @@ n          Print current byte number (in hex) followed by current byte (in hex)
 $          Move to last byte and print it (in hex)
 12,34p     Print bytes 12 - 34 inclusive (in hex), then move to byte 34
 0x12,0x34p Print bytes 0x12 - 0x34 inclusive (in hex), then move to byte 0x34
+w30        Print a linebreak every 30 bytes
+w0         Print bytes without linebreaks
 q          quit
 ");
 }
@@ -47,8 +49,10 @@ impl Command {
         let re_dec_plus_index  = Regex::new(r"^ *\+(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
         let re_help = Regex::new(r"^ *\?").unwrap();
+        let re_width = Regex::new(r"^ *w *(?P<width>[0-9]+) *$").unwrap();
 
         let is_help                  = re_help.is_match(line);
+        let is_width                 = re_width.is_match(line);
         let is_hex_range             = re_hex_range.is_match(line);
         let is_dec_range             = re_dec_range.is_match(line);
         let is_hex_range_with_dollar = re_hex_range_with_dollar.is_match(line);
@@ -78,6 +82,12 @@ impl Command {
          * called 'x' */
         let re = if is_dollar {
             re_dollar
+        }
+        else if is_help {
+            re_help
+        }
+        else if is_width {
+            re_width
         }
         else if is_hex_range {
             re_hex_range
@@ -126,6 +136,16 @@ impl Command {
             Some(Command{
                 range: (0, 0),
                 command: 'h',
+                args: vec![],
+            })
+        }
+        else if is_width {
+            // println!("is_width");
+            let caps = caps.unwrap();
+            let width = usize::from_str_radix(caps.name("width").unwrap().as_str(), 10).unwrap();
+            Some(Command{
+                range: (width, width),
+                command: 'w',
                 args: vec![],
             })
         }
@@ -276,7 +296,7 @@ fn num_bytes_or_die(open_file: &std::fs::File) -> usize {
 }
 
 
-fn padded_byte(byte:u8) -> String{
+fn padded_byte(byte:u8) -> String {
     return if byte < 0x10 {
         format!("0{:x}", byte)
     }
@@ -286,15 +306,30 @@ fn padded_byte(byte:u8) -> String{
 }
 
 
-fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding: Option<&str>) {
+fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding: Option<&str>,
+        width: Option<usize>) {
     if n_padding.is_some() {
         for i in from_index..to_index + 1 {
             println!("0x{:x}{}{}", i, n_padding.unwrap(), padded_byte(all_bytes[i]));
         }
     }
     else {
+        let mut counter: usize = 0;
         for i in from_index..to_index {
-            print!("{} ", padded_byte(all_bytes[i]));
+            counter += 1;
+            print!("{}", padded_byte(all_bytes[i]));
+            if let Some(w) = width {
+                if counter >= w {
+                    counter = 0;
+                    println!();
+                }
+                else {
+                    print!(" ");
+                }
+            }
+            else {
+                print!(" ");
+            }
         }
         println!("{}", padded_byte(all_bytes[to_index]));
     }
@@ -340,6 +375,7 @@ fn main() {
     let max_index = num_bytes - 1;
     // TODO Below here should be a function called main_loop()
     let mut index = max_index;
+    let mut width: Option<usize> = None;
 
     println!("? for help\n\n0x{:x}", index);
     loop {
@@ -349,7 +385,10 @@ fn main() {
         if let Some(command) = Command::from_index_and_line(index, &input, max_index) {
             // println!("0x{:?}", command);
             match command.command {
-                'q' => std::process::exit(0),
+                'e' => {
+                    println!("?");
+                    continue;
+                },
                 'g' => {
                     if command.range.1 > max_index {
                         println!("?");
@@ -361,14 +400,6 @@ fn main() {
                 'h' => {
                     print_help();
                 },
-                'p' => {
-                    if command.range.1 > max_index {
-                        println!("?");
-                        continue;
-                    }
-                    print_bytes(&all_bytes, command.range.0, command.range.1, None);
-                    index = command.range.1;
-                },
                 'n' => {
 
                     /* n10 should error, just like real ed */
@@ -376,8 +407,27 @@ fn main() {
                         println!("?");
                         continue;
                     }
-                    print_bytes(&all_bytes, command.range.0, command.range.1, Some(n_padding));
+                    print_bytes(&all_bytes, command.range.0, command.range.1,
+                            Some(n_padding), None);
                     index = command.range.1;
+                },
+                'p' => {
+                    if command.range.1 > max_index {
+                        println!("?");
+                        continue;
+                    }
+                    print_bytes(&all_bytes, command.range.0, command.range.1,
+                            None, width);
+                    index = command.range.1;
+                },
+                'q' => std::process::exit(0),
+                'w' => {
+                    width = if command.range.0 > 0 {
+                        Some(command.range.0)
+                    }
+                    else {
+                        None
+                    }
                 },
                 _ => {
                     println!("?");
