@@ -234,6 +234,15 @@ fn main() {
                     index = command.range.0;
                     print_one_byte(all_bytes[index]);
                 },
+                'n' => {
+                    if command.range.0 > max_index {
+                        println!("?");
+                        continue;
+                    }
+                    index = command.range.0;
+                    print!("0x{:x}    ", index);
+                    print_one_byte(all_bytes[index]);
+                },
                 '$' => {
                     index = max_index;
                     print_one_byte(all_bytes[index]);
@@ -243,6 +252,10 @@ fn main() {
                     continue;
                 },
             }
+        }
+        else {
+            println!("?");
+            continue;
         }
     }
 }
