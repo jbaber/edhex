@@ -9,10 +9,6 @@ use regex::Regex;
 #[derive(Debug)]
 struct Command {
     range: (usize, usize),
-
-    /* 'g' means goto
-     * 'p' means print
-     */
     command: char,
     args: Vec<String>,
 }
@@ -28,66 +24,125 @@ impl Command {
         let re_dec_range = Regex::new(r"^ *(?P<begin>[0-9]+) *, *(?P<end>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_hex_specified_index = Regex::new(r"^ *0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_dec_specified_index = Regex::new(r"^ *(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_hex_minus_index = Regex::new(r"^ *-0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_hex_plus_index = Regex::new(r"^ *+0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_dec_minus_index = Regex::new(r"^ *-(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_dec_plus_index  = Regex::new(r"^ *\+(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
 
-        if re_hex_range.is_match(line) {
-            let caps = re_hex_range.captures(line).unwrap();
-            let range = (usize::from_str_radix(caps.name("begin").unwrap().as_str(), 16).unwrap(),
-                         usize::from_str_radix(caps.name("end"  ).unwrap().as_str(), 16).unwrap());
+        let is_hex_range           = re_hex_range.is_match(line);
+        let is_dec_range           = re_dec_range.is_match(line);
+        let is_hex_specified_index = re_hex_specified_index.is_match(line);
+        let is_dec_specified_index = re_dec_specified_index.is_match(line);
+        let is_hex_minus_index     = re_hex_minus_index.is_match(line);
+        let is_dec_minus_index     = re_dec_minus_index.is_match(line);
+        let is_hex_plus_index      = re_hex_plus_index.is_match(line);
+        let is_dec_plus_index      = re_dec_plus_index.is_match(line);
+
+        let is_range               = is_dec_range || is_hex_range;
+        let is_specified_index     = is_dec_specified_index || is_hex_specified_index;
+        let is_minus_index         = is_dec_minus_index || is_hex_minus_index;
+        let is_plus_index          = is_dec_plus_index || is_hex_plus_index;
+        let is_hex                 = is_hex_range || is_hex_specified_index ||
+                                     is_hex_minus_index || is_hex_plus_index;
+
+        let is_offset_index        = is_minus_index || is_plus_index;
+
+        let begin: usize;
+        let end: usize;
+        let the_rest: String;
+
+        /* check hex first everywhere since 0x... looks like line 0 followed by a command
+         * called 'x' */
+        let re = if is_hex_range {
+            re_hex_range
+        }
+        else if is_dec_range {
+            re_dec_range
+        }
+        else if is_hex_specified_index {
+            re_hex_specified_index
+        }
+        else if is_dec_specified_index {
+            re_dec_specified_index
+        }
+        else if is_hex_plus_index {
+            re_hex_plus_index
+        }
+        else if is_dec_plus_index {
+            re_dec_plus_index
+        }
+        else if is_hex_minus_index {
+            re_hex_minus_index
+        }
+        else if is_dec_minus_index {
+            re_dec_minus_index
+        }
+        else {
+            re_matches_nothing
+        };
+
+        let caps = re.captures(line);
+
+        let radix = if is_hex {
+            16
+        }
+        else {
+            10
+        };
+
+        if is_range {
+            // println!("is_range");
+            let caps = caps.unwrap();
+            begin = usize::from_str_radix(caps.name("begin").unwrap().as_str(), radix).unwrap();
+            end   = usize::from_str_radix(caps.name("end"  ).unwrap().as_str(), radix).unwrap();
             let the_rest = caps.name("the_rest").unwrap().as_str().trim();
             if the_rest.len() == 0 {
                 None
             }
             else {
                 Some(Command{
-                    range: range,
+                    range: (begin, end),
                     command: the_rest.chars().next().unwrap(),
                     args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
                 })
             }
         }
 
-        else if re_dec_range.is_match(line) {
-            let caps = re_dec_range.captures(line).unwrap();
-            let range = (usize::from_str_radix(caps.name("begin").unwrap().as_str(), 10).unwrap(),
-                        usize::from_str_radix(caps.name("end"  ).unwrap().as_str(), 10).unwrap());
-            let the_rest = caps.name("the_rest").unwrap().as_str().trim();
-            if the_rest.len() == 0 {
-                None
-            }
-            else {
-                Some(Command{
-                    range: range,
-                    command: the_rest.chars().next().unwrap(),
-                    args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
-                })
-            }
-        }
-
-        else if re_hex_specified_index.is_match(line) {
-            let caps = re_hex_specified_index.captures(line).unwrap();
-            let range = (usize::from_str_radix(caps.name("index").unwrap().as_str(), 16).unwrap(),
-                         usize::from_str_radix(caps.name("index").unwrap().as_str(), 16).unwrap());
+        else if is_specified_index {
+            // println!("is_specified_index");
+            let caps = caps.unwrap();
+            let specific_index = usize::from_str_radix(caps.name("index").unwrap().as_str(), radix).unwrap();
+            let begin = specific_index;
             let the_rest = caps.name("the_rest").unwrap().as_str().trim();
             if the_rest.len() == 0 {
                 Some(Command{
-                    range: range,
+                    range: (begin, begin),
                     command: 'g',
                     args: vec![],
                 })
             }
             else {
                 Some(Command{
-                    range: range,
+                    range: (begin, begin),
                     command: the_rest.chars().next().unwrap(),
                     args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
                 })
             }
         }
 
-        else if re_dec_specified_index.is_match(line) {
-            let caps = re_dec_specified_index.captures(line).unwrap();
-            let range = (usize::from_str_radix(caps.name("index").unwrap().as_str(), 10).unwrap(),
-                         usize::from_str_radix(caps.name("index").unwrap().as_str(), 10).unwrap());
+
+        else if is_offset_index {
+            // println!("is_specified_index");
+            let caps = caps.unwrap();
+            let index_offset = usize::from_str_radix(caps.name("index").unwrap().as_str(), radix).unwrap();
+            let begin = if is_plus_index {
+                index + index_offset
+            }
+            else {
+                index - index_offset
+            };
+            let range = (begin, begin);
             let the_rest = caps.name("the_rest").unwrap().as_str();
             if the_rest.len() == 0 {
                 Some(Command{
@@ -105,8 +160,9 @@ impl Command {
             }
         }
 
-        /* Not a range, so just a command with arguments */
+        /* Now just a command with arguments */
         else {
+            // println!("just a command");
             let line = line.trim();
             match line.len() {
                 0 => Some(Command{
@@ -207,6 +263,7 @@ fn main() {
 
 
     let max_index = num_bytes - 1;
+    // TODO Below here should be a function called main_loop()
     let mut index = max_index;
 
     println!("0x{:x}", index);
@@ -235,7 +292,9 @@ fn main() {
                     print_one_byte(all_bytes[index]);
                 },
                 'n' => {
-                    if command.range.0 > max_index {
+
+                    /* n10 should error, just like real ed */
+                    if (command.range.0 > max_index) || (command.args.len() != 0) {
                         println!("?");
                         continue;
                     }
