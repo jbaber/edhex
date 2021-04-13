@@ -7,6 +7,16 @@ use ansi_term::Color;
 use ansi_term::Color::Fixed;
 
 
+macro_rules! skip_bad_range {
+    ($command:ident, $all_bytes:ident) => {
+        if $command.bad_range(&$all_bytes) {
+            println!("?");
+            continue;
+        }
+    }
+}
+
+
 /* Byte formatting stuff lifted from hexyl */
 const COLOR_NULL: Color = Fixed(1);
 const COLOR_ASCII_PRINTABLE: Color = Color::Cyan;
@@ -488,9 +498,10 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     print_help();
                 },
                 'n' => {
+                    skip_bad_range!(command, all_bytes);
 
                     /* n10 should error, just like real ed */
-                    if command.bad_range(&all_bytes) || (command.args.len() != 0) {
+                    if command.args.len() != 0 {
                         println!("?");
                         continue;
                     }
@@ -499,10 +510,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     index = command.range.1;
                 },
                 'p' => {
-                    if command.bad_range(&all_bytes) {
-                        println!("?");
-                        continue;
-                    }
+                    skip_bad_range!(command, all_bytes);
                     print_bytes(&all_bytes, command.range.0, command.range.1,
                             None, width);
                     index = command.range.1;
