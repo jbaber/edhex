@@ -92,6 +92,11 @@ q          quit
 
 
 impl Command {
+    fn bad_range(&self, all_bytes: &Vec<u8>) -> bool {
+        all_bytes.len() == 0 || self.range.1 >= all_bytes.len()
+    }
+
+
     fn from_index_and_line(index: usize, line: &str, max_index: usize) -> Option<Command> {
 
         // TODO Make these constants utside of this function so they don't get
@@ -447,9 +452,8 @@ pub fn actual_runtime(filename: &str) -> i32 {
     }
 
 
-    let max_index = num_bytes - 1;
     // TODO Below here should be a function called main_loop()
-    let mut index = max_index;
+    let mut index = num_bytes - 1;
     let mut width: Option<usize> = None;
 
     println!("? for help\n\n0x{:x}", index);
@@ -464,7 +468,8 @@ pub fn actual_runtime(filename: &str) -> i32 {
             }
         };
 
-        if let Some(command) = Command::from_index_and_line(index, &input, max_index) {
+        if let Some(command) = Command::from_index_and_line(index, &input,
+                all_bytes.len() - 1) {
             // println!("0x{:?}", command);
             match command.command {
                 'e' => {
@@ -472,7 +477,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     continue;
                 },
                 'g' => {
-                    if command.range.1 > max_index {
+                    if command.bad_range(&all_bytes) {
                         println!("?");
                         continue;
                     }
@@ -485,7 +490,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 'n' => {
 
                     /* n10 should error, just like real ed */
-                    if (command.range.1 > max_index) || (command.args.len() != 0) {
+                    if command.bad_range(&all_bytes) || (command.args.len() != 0) {
                         println!("?");
                         continue;
                     }
@@ -494,7 +499,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     index = command.range.1;
                 },
                 'p' => {
-                    if command.range.1 > max_index {
+                    if command.bad_range(&all_bytes) {
                         println!("?");
                         continue;
                     }
