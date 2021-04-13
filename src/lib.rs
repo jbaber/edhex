@@ -482,6 +482,9 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 all_bytes.len() - 1) {
             // println!("0x{:?}", command);
             match command.command {
+                'c' => {
+                    // TODO START HERE
+                },
                 'e' => {
                     println!("?");
                     continue;
