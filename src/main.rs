@@ -85,8 +85,8 @@ n          Print current byte number (in hex) followed by current byte (in hex)
 $          Move to last byte and print it (in hex)
 12,34p     Print bytes 12 - 34 inclusive (in hex), then move to byte 34
 0x12,0x34p Print bytes 0x12 - 0x34 inclusive (in hex), then move to byte 0x34
-w30        Print a linebreak every 30 bytes
-w0         Print bytes without linebreaks
+W30        Print a linebreak every 30 bytes
+W0         Print bytes without linebreaks
 q          quit
 ");
 }
@@ -111,7 +111,7 @@ impl Command {
         let re_dec_plus_index  = Regex::new(r"^ *\+(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
         let re_help = Regex::new(r"^ *\?").unwrap();
-        let re_width = Regex::new(r"^ *w *(?P<width>[0-9]+) *$").unwrap();
+        let re_width = Regex::new(r"^ *W *(?P<width>[0-9]+) *$").unwrap();
 
         let is_help                  = re_help.is_match(line);
         let is_width                 = re_width.is_match(line);
@@ -207,7 +207,7 @@ impl Command {
             let width = usize::from_str_radix(caps.name("width").unwrap().as_str(), 10).unwrap();
             Some(Command{
                 range: (width, width),
-                command: 'w',
+                command: 'W',
                 args: vec![],
             })
         }
@@ -488,7 +488,7 @@ fn main() {
                     index = command.range.1;
                 },
                 'q' => std::process::exit(0),
-                'w' => {
+                'W' => {
                     width = if command.range.0 > 0 {
                         Some(command.range.0)
                     }
