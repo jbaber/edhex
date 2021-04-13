@@ -4,6 +4,68 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 use regex::Regex;
+use ansi_term::Color;
+use ansi_term::Color::Fixed;
+
+
+/* Byte formatting stuff lifted from hexyl */
+const COLOR_NULL: Color = Fixed(1);
+const COLOR_ASCII_PRINTABLE: Color = Color::Cyan;
+const COLOR_ASCII_WHITESPACE: Color = Color::Green;
+const COLOR_ASCII_OTHER: Color = Color::Purple;
+const COLOR_NONASCII: Color = Color::Yellow;
+
+pub enum ByteCategory {
+    Null,
+    AsciiPrintable,
+    AsciiWhitespace,
+    AsciiOther,
+    NonAscii,
+}
+
+#[derive(Copy, Clone)]
+struct Byte(u8);
+
+impl Byte {
+    fn category(self) -> ByteCategory {
+        if self.0 == 0x00 {
+            ByteCategory::Null
+        } else if self.0.is_ascii_graphic() {
+            ByteCategory::AsciiPrintable
+        } else if self.0.is_ascii_whitespace() {
+            ByteCategory::AsciiWhitespace
+        } else if self.0.is_ascii() {
+            ByteCategory::AsciiOther
+        } else {
+            ByteCategory::NonAscii
+        }
+    }
+
+    fn color(self) -> &'static Color {
+        use crate::ByteCategory::*;
+
+        match self.category() {
+            Null => &COLOR_NULL,
+            AsciiPrintable => &COLOR_ASCII_PRINTABLE,
+            AsciiWhitespace => &COLOR_ASCII_WHITESPACE,
+            AsciiOther => &COLOR_ASCII_OTHER,
+            NonAscii => &COLOR_NONASCII,
+        }
+    }
+
+    fn as_char(self) -> char {
+        use crate::ByteCategory::*;
+
+        match self.category() {
+            Null => '0',
+            AsciiPrintable => self.0 as char,
+            AsciiWhitespace if self.0 == 0x20 => ' ',
+            AsciiWhitespace => '_',
+            AsciiOther => '•',
+            NonAscii => '×',
+        }
+    }
+}
 
 #[derive(Debug)]
 struct Command {
@@ -296,13 +358,18 @@ fn num_bytes_or_die(open_file: &std::fs::File) -> usize {
 }
 
 
-fn padded_byte(byte:u8) -> String {
-    return if byte < 0x10 {
-        format!("0{:x}", byte)
+fn formatted_byte(byte:u8, color:bool) -> String {
+    if color {
+        Byte(byte).color().paint(padded_byte(byte)).to_string()
     }
     else {
-        format!("{:x}", byte)
+        padded_byte(byte)
     }
+}
+
+
+fn padded_byte(byte:u8) -> String {
+    format!("{:02x}", byte)
 }
 
 
@@ -310,14 +377,14 @@ fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding
         width: Option<usize>) {
     if n_padding.is_some() {
         for i in from_index..to_index + 1 {
-            println!("0x{:x}{}{}", i, n_padding.unwrap(), padded_byte(all_bytes[i]));
+            println!("0x{:x}{}{}", i, n_padding.unwrap(), formatted_byte(all_bytes[i], true));
         }
     }
     else {
         let mut counter: usize = 0;
         for i in from_index..to_index {
             counter += 1;
-            print!("{}", padded_byte(all_bytes[i]));
+            print!("{}", formatted_byte(all_bytes[i], true));
             if let Some(w) = width {
                 if counter >= w {
                     counter = 0;
@@ -331,13 +398,13 @@ fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding
                 print!(" ");
             }
         }
-        println!("{}", padded_byte(all_bytes[to_index]));
+        println!("{}", formatted_byte(all_bytes[to_index], true));
     }
 }
 
 
 fn print_one_byte(byte:u8) {
-    println!("0x{}", padded_byte(byte));
+    println!("{}", formatted_byte(byte, true));
 }
 
 
