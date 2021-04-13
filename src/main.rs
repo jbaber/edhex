@@ -276,11 +276,11 @@ fn main() {
             match command.command {
                 'q' => std::process::exit(0),
                 'g' => {
-                    if command.range.0 > max_index {
+                    if command.range.1 > max_index {
                         println!("?");
                         continue;
                     }
-                    index = command.range.0;
+                    index = command.range.1;
                     print_one_byte(all_bytes[index]);
                 },
                 'p' => {
