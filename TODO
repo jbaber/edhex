@@ -1,1 +1,6 @@
-Handle things like "$-10"
+- Handle things like "$-10"
+- Handle .,$ type ranges
+- Support editing and writing out
+- Separate library from binary
+- Read from STDIN
+- docs.rs documentation

@@ -1,10 +1,13 @@
 [package]
 name = "edhex"
-version = "1.0.0"
+version = "0.1.0"
 authors = ["John Baber-Lucero <cargo@frundle.com>"]
+license = "GPL-3.0"
+description = "Hex editor that works vaguely like ed"
+homepage = "https://github.com/jbaber/edhex"
+repository = "https://github.com/jbaber/edhex"
+readme = "README.md"
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 regex = "1.4.5"
