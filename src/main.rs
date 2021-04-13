@@ -13,6 +13,21 @@ struct Command {
 }
 
 
+fn print_help() {
+    print!("
+?          This help
+p          Print current byte (in hex)
+n          Print current byte number (in hex) followed by current byte (in hex)
+314        Move to byte number   314 (in dec) and print that byte (in hex)
+0x314      Move to byte number 0x314 and print that byte (in hex)
+$          Move to last byte and print it (in hex)
+12,34p     Print bytes 12 - 34 inclusive (in hex), then move to byte 34
+0x12,0x34p Print bytes 0x12 - 0x34 inclusive (in hex), then move to byte 0x34
+q          quit
+");
+}
+
+
 impl Command {
     fn from_index_and_line(index: usize, line: &str, max_index: usize) -> Option<Command> {
 
@@ -31,7 +46,9 @@ impl Command {
         let re_dec_minus_index = Regex::new(r"^ *-(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_dec_plus_index  = Regex::new(r"^ *\+(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
+        let re_help = Regex::new(r"^ *\?").unwrap();
 
+        let is_help                  = re_help.is_match(line);
         let is_hex_range             = re_hex_range.is_match(line);
         let is_dec_range             = re_dec_range.is_match(line);
         let is_hex_range_with_dollar = re_hex_range_with_dollar.is_match(line);
@@ -56,7 +73,6 @@ impl Command {
 
         let begin: usize;
         let end: usize;
-        let the_rest: String;
 
         /* check hex first everywhere since 0x... looks like line 0 followed by a command
          * called 'x' */
@@ -106,7 +122,14 @@ impl Command {
             10
         };
 
-        if is_range {
+        if is_help {
+            Some(Command{
+                range: (0, 0),
+                command: 'h',
+                args: vec![],
+            })
+        }
+        else if is_range {
             // println!("is_range");
             let caps = caps.unwrap();
             begin = usize::from_str_radix(caps.name("begin").unwrap().as_str(), radix).unwrap();
@@ -318,7 +341,7 @@ fn main() {
     // TODO Below here should be a function called main_loop()
     let mut index = max_index;
 
-    println!("0x{:x}", index);
+    println!("? for help\n\n0x{:x}", index);
     loop {
         print!("*");
         io::stdout().flush().unwrap();
@@ -334,6 +357,9 @@ fn main() {
                     }
                     index = command.range.1;
                     print_one_byte(all_bytes[index]);
+                },
+                'h' => {
+                    print_help();
                 },
                 'p' => {
                     if command.range.1 > max_index {
@@ -353,10 +379,6 @@ fn main() {
                     print_bytes(&all_bytes, command.range.0, command.range.1, Some(n_padding));
                     index = command.range.1;
                 },
-                '$' => {
-                    index = max_index;
-                    print_one_byte(all_bytes[index]);
-                }
                 _ => {
                     println!("?");
                     continue;
