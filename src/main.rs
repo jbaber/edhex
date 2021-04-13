@@ -5,7 +5,6 @@ use std::io::Read;
 use std::io::Write;
 use regex::Regex;
 
-
 #[derive(Debug)]
 struct Command {
     range: (usize, usize),
@@ -15,32 +14,39 @@ struct Command {
 
 
 impl Command {
-    fn from_index_and_line(index: usize, line: &str) -> Option<Command> {
+    fn from_index_and_line(index: usize, line: &str, max_index: usize) -> Option<Command> {
 
         // TODO Make these constants utside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
         let re_hex_range = Regex::new(r"^ *0x(?P<begin>[0-9a-fA-F]+) *, *0x(?P<end>[0-9a-fA-F]+) *(?P<the_rest>.*) *$").unwrap();
         let re_dec_range = Regex::new(r"^ *(?P<begin>[0-9]+) *, *(?P<end>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_hex_range_with_dollar = Regex::new(r"^ *0x(?P<begin>[0-9a-fA-F]+) *, *(?P<end>\$) *(?P<the_rest>.*) *$").unwrap();
+        let re_dec_range_with_dollar = Regex::new(r"^ *(?P<begin>[0-9]+) *, *(?P<end>\$) *(?P<the_rest>.*) *$").unwrap();
         let re_hex_specified_index = Regex::new(r"^ *0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_dec_specified_index = Regex::new(r"^ *(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_dollar = Regex::new(r"^ *\$ *$").unwrap();
         let re_hex_minus_index = Regex::new(r"^ *-0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_hex_plus_index = Regex::new(r"^ *+0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_dec_minus_index = Regex::new(r"^ *-(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_dec_plus_index  = Regex::new(r"^ *\+(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
 
-        let is_hex_range           = re_hex_range.is_match(line);
-        let is_dec_range           = re_dec_range.is_match(line);
-        let is_hex_specified_index = re_hex_specified_index.is_match(line);
-        let is_dec_specified_index = re_dec_specified_index.is_match(line);
-        let is_hex_minus_index     = re_hex_minus_index.is_match(line);
-        let is_dec_minus_index     = re_dec_minus_index.is_match(line);
-        let is_hex_plus_index      = re_hex_plus_index.is_match(line);
-        let is_dec_plus_index      = re_dec_plus_index.is_match(line);
+        let is_hex_range             = re_hex_range.is_match(line);
+        let is_dec_range             = re_dec_range.is_match(line);
+        let is_hex_range_with_dollar = re_hex_range_with_dollar.is_match(line);
+        let is_dec_range_with_dollar = re_dec_range_with_dollar.is_match(line);
+        let is_hex_specified_index   = re_hex_specified_index.is_match(line);
+        let is_dec_specified_index   = re_dec_specified_index.is_match(line);
+        let is_dollar                = re_dollar.is_match(line);
+        let is_hex_minus_index       = re_hex_minus_index.is_match(line);
+        let is_dec_minus_index       = re_dec_minus_index.is_match(line);
+        let is_hex_plus_index        = re_hex_plus_index.is_match(line);
+        let is_dec_plus_index        = re_dec_plus_index.is_match(line);
 
-        let is_range               = is_dec_range || is_hex_range;
-        let is_specified_index     = is_dec_specified_index || is_hex_specified_index;
+        let is_range_with_dollar   = is_hex_range_with_dollar || is_dec_range_with_dollar;
+        let is_range               = is_dec_range || is_hex_range || is_range_with_dollar;
+        let is_specified_index     = is_dec_specified_index || is_hex_specified_index || is_dollar;
         let is_minus_index         = is_dec_minus_index || is_hex_minus_index;
         let is_plus_index          = is_dec_plus_index || is_hex_plus_index;
         let is_hex                 = is_hex_range || is_hex_specified_index ||
@@ -54,11 +60,20 @@ impl Command {
 
         /* check hex first everywhere since 0x... looks like line 0 followed by a command
          * called 'x' */
-        let re = if is_hex_range {
+        let re = if is_dollar {
+            re_dollar
+        }
+        else if is_hex_range {
             re_hex_range
         }
         else if is_dec_range {
             re_dec_range
+        }
+        else if is_hex_range_with_dollar {
+            re_hex_range_with_dollar
+        }
+        else if is_dec_range_with_dollar {
+            re_dec_range_with_dollar
         }
         else if is_hex_specified_index {
             re_hex_specified_index
@@ -95,7 +110,12 @@ impl Command {
             // println!("is_range");
             let caps = caps.unwrap();
             begin = usize::from_str_radix(caps.name("begin").unwrap().as_str(), radix).unwrap();
-            end   = usize::from_str_radix(caps.name("end"  ).unwrap().as_str(), radix).unwrap();
+            end   = if is_range_with_dollar {
+                max_index
+            }
+            else {
+                usize::from_str_radix(caps.name("end"  ).unwrap().as_str(), radix).unwrap()
+            };
             let the_rest = caps.name("the_rest").unwrap().as_str().trim();
             if the_rest.len() == 0 {
                 None
@@ -112,9 +132,19 @@ impl Command {
         else if is_specified_index {
             // println!("is_specified_index");
             let caps = caps.unwrap();
-            let specific_index = usize::from_str_radix(caps.name("index").unwrap().as_str(), radix).unwrap();
+            let specific_index = if is_dollar {
+                max_index
+            }
+            else {
+                usize::from_str_radix(caps.name("index").unwrap().as_str(), radix).unwrap()
+            };
             let begin = specific_index;
-            let the_rest = caps.name("the_rest").unwrap().as_str().trim();
+            let the_rest = if is_dollar {
+                String::new()
+            }
+            else {
+                caps.name("the_rest").unwrap().as_str().trim().to_owned()
+            };
             if the_rest.len() == 0 {
                 Some(Command{
                     range: (begin, begin),
@@ -233,11 +263,18 @@ fn padded_byte(byte:u8) -> String{
 }
 
 
-fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize) {
-    for i in from_index..to_index {
-        print!("{} ", padded_byte(all_bytes[i]));
+fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding: Option<&str>) {
+    if n_padding.is_some() {
+        for i in from_index..to_index + 1 {
+            println!("0x{:x}{}{}", i, n_padding.unwrap(), padded_byte(all_bytes[i]));
+        }
     }
-    println!("{}", padded_byte(all_bytes[to_index]));
+    else {
+        for i in from_index..to_index {
+            print!("{} ", padded_byte(all_bytes[i]));
+        }
+        println!("{}", padded_byte(all_bytes[to_index]));
+    }
 }
 
 
@@ -257,6 +294,8 @@ fn main() {
     let filename = &args[1];
     let mut file = open_or_die(&filename);
     let num_bytes = num_bytes_or_die(&file);
+    // TODO calculate based on longest possible index
+    let n_padding = "     ";
 
     /* Read all bytes into memory just like real ed */
     let mut all_bytes = Vec::new();
@@ -284,7 +323,7 @@ fn main() {
         print!("*");
         io::stdout().flush().unwrap();
         let input = get_input_or_die();
-        if let Some(command) = Command::from_index_and_line(index, &input) {
+        if let Some(command) = Command::from_index_and_line(index, &input, max_index) {
             // println!("0x{:?}", command);
             match command.command {
                 'q' => std::process::exit(0),
@@ -301,7 +340,7 @@ fn main() {
                         println!("?");
                         continue;
                     }
-                    print_bytes(&all_bytes, command.range.0, command.range.1);
+                    print_bytes(&all_bytes, command.range.0, command.range.1, None);
                     index = command.range.1;
                 },
                 'n' => {
@@ -311,9 +350,8 @@ fn main() {
                         println!("?");
                         continue;
                     }
-                    index = command.range.0;
-                    print!("0x{:x}    ", index);
-                    print_one_byte(all_bytes[index]);
+                    print_bytes(&all_bytes, command.range.0, command.range.1, Some(n_padding));
+                    index = command.range.1;
                 },
                 '$' => {
                     index = max_index;
