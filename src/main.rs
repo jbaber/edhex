@@ -223,13 +223,26 @@ fn num_bytes_or_die(open_file: &std::fs::File) -> usize {
 }
 
 
-fn print_one_byte(byte:u8) {
-    if byte < 10 {
-        println!("0x0{:x}", byte);
+fn padded_byte(byte:u8) -> String{
+    return if byte < 0x10 {
+        format!("0{:x}", byte)
     }
     else {
-        println!("0x{:x}", byte);
+        format!("{:x}", byte)
     }
+}
+
+
+fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize) {
+    for i in from_index..to_index {
+        print!("{} ", padded_byte(all_bytes[i]));
+    }
+    println!("{}", padded_byte(all_bytes[to_index]));
+}
+
+
+fn print_one_byte(byte:u8) {
+    println!("0x{}", padded_byte(byte));
 }
 
 
@@ -284,17 +297,17 @@ fn main() {
                     print_one_byte(all_bytes[index]);
                 },
                 'p' => {
-                    if command.range.0 > max_index {
+                    if command.range.1 > max_index {
                         println!("?");
                         continue;
                     }
-                    index = command.range.0;
-                    print_one_byte(all_bytes[index]);
+                    print_bytes(&all_bytes, command.range.0, command.range.1);
+                    index = command.range.1;
                 },
                 'n' => {
 
                     /* n10 should error, just like real ed */
-                    if (command.range.0 > max_index) || (command.args.len() != 0) {
+                    if (command.range.1 > max_index) || (command.args.len() != 0) {
                         println!("?");
                         continue;
                     }
