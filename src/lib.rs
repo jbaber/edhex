@@ -85,15 +85,16 @@ struct Command {
 
 
 fn print_help() {
-    print!("
+    print!("Input is interpreted as hex unless toggled to decimal with 'x'
 ?          This help
-p          Print current byte (in hex)
-n          Print current byte number (in hex) followed by current byte (in hex)
-314        Move to byte number   314 (in dec) and print that byte (in hex)
-0x314      Move to byte number 0x314 and print that byte (in hex)
-$          Move to last byte and print it (in hex)
-12,34p     Print bytes 12 - 34 inclusive (in hex), then move to byte 34
-0x12,0x34p Print bytes 0x12 - 0x34 inclusive (in hex), then move to byte 0x34
+n          Toggle whether or not byte numbers are printed before bytes
+N          Print current byte number followed by current byte
+p          Print current byte
+x          Toggle whether to interpret inputs as hex or decimal (and print which has resulted)
+X          Print whether inputs are interpreted in hex or decimal
+314        Move to byte number 0x314 (or 0d314 depending on 'x') and print that byte
+$          Move to last byte and print it
+12,34p     Print bytes 12 - 34 inclusive, then move to byte 0x34 (or 0d34 depending on 'x')
 W30        Print a linebreak every 30 bytes
 W0         Print bytes without linebreaks
 q          quit
@@ -107,93 +108,59 @@ impl Command {
     }
 
 
-    fn from_index_and_line(index: usize, line: &str, max_index: usize) -> Option<Command> {
+    fn from_index_and_line(index: usize, line: &str,
+            max_index: usize, radix: Option<usize>) -> Option<Command> {
 
-        // TODO Make these constants utside of this function so they don't get
+        // TODO Make these constants outside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
-        let re_hex_range = Regex::new(r"^ *0x(?P<begin>[0-9a-fA-F]+) *, *0x(?P<end>[0-9a-fA-F]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_dec_range = Regex::new(r"^ *(?P<begin>[0-9]+) *, *(?P<end>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_hex_range_with_dollar = Regex::new(r"^ *0x(?P<begin>[0-9a-fA-F]+) *, *(?P<end>\$) *(?P<the_rest>.*) *$").unwrap();
-        let re_dec_range_with_dollar = Regex::new(r"^ *(?P<begin>[0-9]+) *, *(?P<end>\$) *(?P<the_rest>.*) *$").unwrap();
-        let re_hex_specified_index = Regex::new(r"^ *0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_dec_specified_index = Regex::new(r"^ *(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_dollar = Regex::new(r"^ *\$ *$").unwrap();
-        let re_hex_minus_index = Regex::new(r"^ *-0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_hex_plus_index = Regex::new(r"^ *+0x(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_dec_minus_index = Regex::new(r"^ *-(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_dec_plus_index  = Regex::new(r"^ *\+(?P<index>[0-9]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_toggle_byte_numbers = Regex::new(r"^ *n.*$").unwrap();
+        let re_print_byte_number = Regex::new(r"^ *N.*$").unwrap();
+        let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_minus_index = Regex::new(r"^ *-(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_plus_index = Regex::new(r"^ *+(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
         let re_help = Regex::new(r"^ *\?").unwrap();
         let re_width = Regex::new(r"^ *W *(?P<width>[0-9]+) *$").unwrap();
 
-        let is_help                  = re_help.is_match(line);
-        let is_width                 = re_width.is_match(line);
-        let is_hex_range             = re_hex_range.is_match(line);
-        let is_dec_range             = re_dec_range.is_match(line);
-        let is_hex_range_with_dollar = re_hex_range_with_dollar.is_match(line);
-        let is_dec_range_with_dollar = re_dec_range_with_dollar.is_match(line);
-        let is_hex_specified_index   = re_hex_specified_index.is_match(line);
-        let is_dec_specified_index   = re_dec_specified_index.is_match(line);
-        let is_dollar                = re_dollar.is_match(line);
-        let is_hex_minus_index       = re_hex_minus_index.is_match(line);
-        let is_dec_minus_index       = re_dec_minus_index.is_match(line);
-        let is_hex_plus_index        = re_hex_plus_index.is_match(line);
-        let is_dec_plus_index        = re_dec_plus_index.is_match(line);
-
-        let is_range_with_dollar   = is_hex_range_with_dollar || is_dec_range_with_dollar;
-        let is_range               = is_dec_range || is_hex_range || is_range_with_dollar;
-        let is_specified_index     = is_dec_specified_index || is_hex_specified_index || is_dollar;
-        let is_minus_index         = is_dec_minus_index || is_hex_minus_index;
-        let is_plus_index          = is_dec_plus_index || is_hex_plus_index;
-        let is_hex                 = is_hex_range || is_hex_specified_index ||
-                                     is_hex_minus_index || is_hex_plus_index;
+        let is_help                = re_help.is_match(line);
+        let is_toggle_byte_numbers = re_toggle_byte_numbers.is_match(line);
+        let is_print_byte_number   = re_print_byte_number.is_match(line);
+        let is_width               = re_width.is_match(line);
+        let is_range               = re_range.is_match(line);
+        let is_specified_index     = re_specified_index.is_match(line);
+        let is_minus_index         = re_minus_index.is_match(line);
+        let is_plus_index          = re_plus_index.is_match(line);
 
         let is_offset_index        = is_minus_index || is_plus_index;
 
         let begin: usize;
         let end: usize;
 
-        /* check hex first everywhere since 0x... looks like line 0 followed by a command
-         * called 'x' */
-        let re = if is_dollar {
-            re_dollar
-        }
-        else if is_help {
+        let re = if is_help {
             re_help
+        }
+        else if is_toggle_byte_numbers {
+            re_toggle_byte_numbers
+        }
+        else if is_print_byte_number {
+            re_print_byte_number
         }
         else if is_width {
             re_width
         }
-        else if is_hex_range {
-            re_hex_range
+        else if is_range {
+            re_range
         }
-        else if is_dec_range {
-            re_dec_range
+        else if is_specified_index {
+            re_specified_index
         }
-        else if is_hex_range_with_dollar {
-            re_hex_range_with_dollar
+        else if is_plus_index {
+            re_plus_index
         }
-        else if is_dec_range_with_dollar {
-            re_dec_range_with_dollar
-        }
-        else if is_hex_specified_index {
-            re_hex_specified_index
-        }
-        else if is_dec_specified_index {
-            re_dec_specified_index
-        }
-        else if is_hex_plus_index {
-            re_hex_plus_index
-        }
-        else if is_dec_plus_index {
-            re_dec_plus_index
-        }
-        else if is_hex_minus_index {
-            re_hex_minus_index
-        }
-        else if is_dec_minus_index {
-            re_dec_minus_index
+        else if is_minus_index {
+            re_minus_index
         }
         else {
             re_matches_nothing
@@ -201,12 +168,7 @@ impl Command {
 
         let caps = re.captures(line);
 
-        let radix = if is_hex {
-            16
-        }
-        else {
-            10
-        };
+        /* TODO START HERE rewriting as above help text descripbes */
 
         if is_help {
             Some(Command{
@@ -482,9 +444,6 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 all_bytes.len() - 1) {
             // println!("0x{:?}", command);
             match command.command {
-                'c' => {
-                    // TODO START HERE
-                },
                 'e' => {
                     println!("?");
                     continue;
