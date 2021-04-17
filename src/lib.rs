@@ -10,7 +10,7 @@ use ansi_term::Color::Fixed;
 macro_rules! skip_bad_range {
     ($command:ident, $all_bytes:ident) => {
         if $command.bad_range(&$all_bytes) {
-            println!("?");
+            println!("? (bad range)");
             continue;
         }
     }
@@ -87,15 +87,17 @@ struct Command {
 fn print_help() {
     print!("Input is interpreted as hex unless toggled to decimal with 'x'
 ?          This help
+<Enter>    Print current byte and move forward one byte
 n          Toggle whether or not byte numbers are printed before bytes
 N          Print current byte number followed by current byte
 p          Print current byte
-x          Toggle whether to interpret inputs as hex or decimal (and print which has resulted)
-X          Print whether inputs are interpreted in hex or decimal
+x          Toggle whether to interpret inputs and display output as hex or decimal
+           (and print which has resulted)
+X          Print whether inputs and line numbers are in hex or decimal
 314        Move to byte number 0x314 (or 0d314 depending on 'x') and print that byte
 $          Move to last byte and print it
 12,34p     Print bytes 12 - 34 inclusive, then move to byte 0x34 (or 0d34 depending on 'x')
-W30        Print a linebreak every 30 bytes
+W30        Print a linebreak every 0x30 bytes (or 0d30 bytes depending on 'x')
 W0         Print bytes without linebreaks
 q          quit
 ");
@@ -109,43 +111,32 @@ impl Command {
 
 
     fn from_index_and_line(index: usize, line: &str,
-            max_index: usize, radix: Option<usize>) -> Option<Command> {
+            max_index: usize, radix: Option<u32>) -> Result<Command, String> {
+        let radix = radix.unwrap_or(16);
 
         // TODO Make these constants outside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
-        let re_toggle_byte_numbers = Regex::new(r"^ *n.*$").unwrap();
-        let re_print_byte_number = Regex::new(r"^ *N.*$").unwrap();
+        let re_blank_line = Regex::new(r"^ *$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?nNpxXq]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_minus_index = Regex::new(r"^ *-(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
-        let re_plus_index = Regex::new(r"^ *+(?P<index>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
+        let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
-        let re_help = Regex::new(r"^ *\?").unwrap();
         let re_width = Regex::new(r"^ *W *(?P<width>[0-9]+) *$").unwrap();
 
-        let is_help                = re_help.is_match(line);
-        let is_toggle_byte_numbers = re_toggle_byte_numbers.is_match(line);
-        let is_print_byte_number   = re_print_byte_number.is_match(line);
+        let is_single_char_command = re_single_char_command.is_match(line);
         let is_width               = re_width.is_match(line);
         let is_range               = re_range.is_match(line);
         let is_specified_index     = re_specified_index.is_match(line);
-        let is_minus_index         = re_minus_index.is_match(line);
-        let is_plus_index          = re_plus_index.is_match(line);
+        let is_offset_index        = re_offset_index.is_match(line);
+        let is_blank_line          = re_blank_line.is_match(line);
 
-        let is_offset_index        = is_minus_index || is_plus_index;
-
-        let begin: usize;
-        let end: usize;
-
-        let re = if is_help {
-            re_help
+        let re = if is_single_char_command {
+            re_single_char_command
         }
-        else if is_toggle_byte_numbers {
-            re_toggle_byte_numbers
-        }
-        else if is_print_byte_number {
-            re_print_byte_number
+        else if is_blank_line {
+            re_blank_line
         }
         else if is_width {
             re_width
@@ -156,11 +147,8 @@ impl Command {
         else if is_specified_index {
             re_specified_index
         }
-        else if is_plus_index {
-            re_plus_index
-        }
-        else if is_minus_index {
-            re_minus_index
+        else if is_offset_index {
+            re_offset_index
         }
         else {
             re_matches_nothing
@@ -168,41 +156,59 @@ impl Command {
 
         let caps = re.captures(line);
 
-        /* TODO START HERE rewriting as above help text descripbes */
-
-        if is_help {
-            Some(Command{
+        if is_single_char_command {
+            Ok(Command{
                 range: (0, 0),
-                command: 'h',
+                command: caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap(),
                 args: vec![],
             })
         }
+
+        else if is_blank_line {
+            Ok(Command{
+                range: (index, index),
+                command: '\n',
+                args: vec![],
+            })
+        }
+
         else if is_width {
             // println!("is_width");
             let caps = caps.unwrap();
-            let width = usize::from_str_radix(caps.name("width").unwrap().as_str(), 10).unwrap();
-            Some(Command{
+            let width = usize::from_str_radix(caps.name("width").unwrap().as_str(), radix).unwrap();
+            Ok(Command{
                 range: (width, width),
                 command: 'W',
                 args: vec![],
             })
         }
+
         else if is_range {
             // println!("is_range");
             let caps = caps.unwrap();
-            begin = usize::from_str_radix(caps.name("begin").unwrap().as_str(), radix).unwrap();
-            end   = if is_range_with_dollar {
-                max_index
+            let begin = number_dot_dollar(index, max_index,
+                    caps.name("begin").unwrap().as_str(), radix);
+            if begin.is_err() {
+                // Why on Earth doesn't this work?
+                // return Err(begin.unwrap());
+                return Err("Can't understand beginning of range.".to_owned());
             }
-            else {
-                usize::from_str_radix(caps.name("end"  ).unwrap().as_str(), radix).unwrap()
-            };
+            let begin = begin.unwrap();
+            let end = number_dot_dollar(index, max_index,
+                    caps.name("end").unwrap().as_str(), radix);
+            if end.is_err() {
+                // Why on Earth doesn't this work?
+                // return end;
+                return Err("Can't understand end of range.".to_owned());
+            }
+            let end = end.unwrap();
+
             let the_rest = caps.name("the_rest").unwrap().as_str().trim();
             if the_rest.len() == 0 {
-                None
+                Err("No arguments given".to_owned())
             }
             else {
-                Some(Command{
+                Ok(Command{
                     range: (begin, end),
                     command: the_rest.chars().next().unwrap(),
                     args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
@@ -213,57 +219,54 @@ impl Command {
         else if is_specified_index {
             // println!("is_specified_index");
             let caps = caps.unwrap();
-            let specific_index = if is_dollar {
-                max_index
+            let specific_index = number_dot_dollar(index, max_index,
+                    caps.name("index").unwrap().as_str(), radix);
+            if specific_index.is_err() {
+                // Why on Earth doesn't this work?
+                // return specific_index;
+                return Err("Can't understand index.".to_owned());
             }
-            else {
-                usize::from_str_radix(caps.name("index").unwrap().as_str(), radix).unwrap()
-            };
-            let begin = specific_index;
-            let the_rest = if is_dollar {
-                String::new()
-            }
-            else {
-                caps.name("the_rest").unwrap().as_str().trim().to_owned()
-            };
+            let specific_index = specific_index.unwrap();
+            let the_rest = caps.name("the_rest").unwrap().as_str().trim().to_owned();
             if the_rest.len() == 0 {
-                Some(Command{
-                    range: (begin, begin),
+                Ok(Command{
+                    range: (specific_index, specific_index),
                     command: 'g',
                     args: vec![],
                 })
             }
             else {
-                Some(Command{
-                    range: (begin, begin),
+                Ok(Command{
+                    range: (specific_index, specific_index),
                     command: the_rest.chars().next().unwrap(),
                     args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
                 })
             }
         }
-
 
         else if is_offset_index {
             // println!("is_specified_index");
             let caps = caps.unwrap();
-            let index_offset = usize::from_str_radix(caps.name("index").unwrap().as_str(), radix).unwrap();
-            let begin = if is_plus_index {
-                index + index_offset
-            }
-            else {
-                index - index_offset
+            let index_offset = usize::from_str_radix(caps.name("offset").unwrap().as_str(), radix).unwrap();
+            let sign = caps.name("sign").unwrap().as_str();
+            let begin = match sign {
+                "+" => index + index_offset,
+                "-" => index - index_offset,
+                _   => {
+                    return Err(format!("Unknown sign {}", sign));
+                }
             };
             let range = (begin, begin);
             let the_rest = caps.name("the_rest").unwrap().as_str();
             if the_rest.len() == 0 {
-                Some(Command{
+                Ok(Command{
                     range: range,
                     command: 'g',
                     args: vec![],
                 })
             }
             else {
-                Some(Command{
+                Ok(Command{
                     range: range,
                     command: the_rest.chars().next().unwrap(),
                     args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
@@ -271,22 +274,8 @@ impl Command {
             }
         }
 
-        /* Now just a command with arguments */
         else {
-            // println!("just a command");
-            let line = line.trim();
-            match line.len() {
-                0 => Some(Command{
-                    range: (index + 1, index + 1),
-                    command: 'g',
-                    args: vec![],
-                }),
-                _ => Some(Command{
-                    range: (index, index),
-                    command: line.chars().next().unwrap(),
-                    args: line[1..].split_whitespace().map(|x| x.to_owned()).collect(),
-                }),
-            }
+            Err(format!("Unable to parse '{}'", line.trim()))
         }
     }
 }
@@ -350,7 +339,7 @@ fn padded_byte(byte:u8) -> String {
 
 
 fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding: Option<&str>,
-        width: Option<usize>) {
+        width: Option<usize>, show_byte_numbers: bool) {
     if n_padding.is_some() {
         for i in from_index..to_index + 1 {
             println!("0x{:x}{}{}", i, n_padding.unwrap(), formatted_byte(all_bytes[i], true));
@@ -381,6 +370,23 @@ fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding
 
 fn print_one_byte(byte:u8) {
     println!("{}", formatted_byte(byte, true));
+}
+
+
+fn number_dot_dollar(index:usize, max_index:usize, input:&str, radix:u32)
+        -> Result<usize, String> {
+    match input {
+        "$" => Ok(max_index),
+        "." => Ok(index),
+        something_else => {
+            if let Ok(number) = usize::from_str_radix(input, radix) {
+                Ok(number)
+            }
+            else {
+                return Err(format!("{} isn't a number in base {}", something_else, radix));
+            }
+        }
+    }
 }
 
 
@@ -427,10 +433,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
     // TODO Below here should be a function called main_loop()
     let mut index = num_bytes - 1;
     let mut width: Option<usize> = None;
+    let mut show_byte_numbers = true;
+    let mut radix = Some(16);
 
     println!("? for help\n\n0x{:x}", index);
     loop {
-
         print!("*");
         io::stdout().flush().unwrap();
         let input = match get_input_or_die() {
@@ -440,8 +447,8 @@ pub fn actual_runtime(filename: &str) -> i32 {
             }
         };
 
-        if let Some(command) = Command::from_index_and_line(index, &input,
-                all_bytes.len() - 1) {
+        if let Ok(command) = Command::from_index_and_line(index, &input,
+                all_bytes.len() - 1, radix) {
             // println!("0x{:?}", command);
             match command.command {
                 'e' => {
@@ -450,7 +457,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 },
                 'g' => {
                     if command.bad_range(&all_bytes) {
-                        println!("?");
+                        println!("? (bad range)");
                         continue;
                     }
                     index = command.range.1;
@@ -460,25 +467,40 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     print_help();
                 },
                 'n' => {
-                    skip_bad_range!(command, all_bytes);
-
-                    /* n10 should error, just like real ed */
-                    if command.args.len() != 0 {
-                        println!("?");
-                        continue;
-                    }
-                    print_bytes(&all_bytes, command.range.0, command.range.1,
-                            Some(n_padding), None);
-                    index = command.range.1;
+                    show_byte_numbers = !show_byte_numbers;
+                    println!("{}", show_byte_numbers);
                 },
+                'N' => {
+                    println!("{:x}{}{}", index, n_padding, all_bytes[index]);
+                },
+                'x' => {
+                    match radix {
+                        Some(16) => {
+                            radix = Some(10);
+                        },
+                        _ => {
+                            radix = Some(16);
+                        },
+                    }
+                },
+                'X' => {
+                    println!("Input and output in {}", match radix {
+                        Some(10) => "decimal",
+                        _ => "hex",
+                    });
+                }
+                '\n' => {
+                    print_one_byte(all_bytes[index]);
+                    index += 1;
+                }
                 'p' => {
                     skip_bad_range!(command, all_bytes);
                     print_bytes(&all_bytes, command.range.0, command.range.1,
-                            None, width);
+                            None, width, show_byte_numbers);
                     index = command.range.1;
                 },
                 'q' => {
-                    return 0
+                    return 0;
                 },
                 'W' => {
                     width = if command.range.0 > 0 {
@@ -489,7 +511,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     }
                 },
                 _ => {
-                    println!("?");
+                    println!("? (Don't understand {})", command.command);
                     continue;
                 },
             }
