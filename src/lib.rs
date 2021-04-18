@@ -390,6 +390,16 @@ fn number_dot_dollar(index:usize, max_index:usize, input:&str, radix:u32)
 }
 
 
+fn lino(line_number:usize, radix:Option<u32>) -> String {
+    if radix == Some(10) {
+        format!("{}", line_number)
+    }
+    else {
+        format!("{:x}", line_number)
+    }
+}
+
+
 pub fn actual_runtime(filename: &str) -> i32 {
     let mut file = match open_or_die(&filename) {
         Ok(file) => {
@@ -400,7 +410,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
         }
     };
 
-    let num_bytes = match num_bytes_or_die(&file) {
+    let mut num_bytes = match num_bytes_or_die(&file) {
         Ok(num_bytes) => {
             num_bytes
         },
@@ -436,7 +446,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
     let mut show_byte_numbers = true;
     let mut radix = Some(16);
 
-    println!("? for help\n\n0x{:x}", index);
+    println!("? for help\n\n{}", lino(index, radix));
     loop {
         print!("*");
         io::stdout().flush().unwrap();
@@ -461,7 +471,8 @@ pub fn actual_runtime(filename: &str) -> i32 {
                         continue;
                     }
                     index = command.range.1;
-                    print_one_byte(all_bytes[index]);
+                    print_bytes(&all_bytes, index, index, Some(n_padding), width,
+                            show_byte_numbers);
                 },
                 '?' => {
                     print_help();
@@ -474,7 +485,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     println!("{}", show_byte_numbers);
                 },
                 'N' => {
-                    println!("{:x}{}{}", index, n_padding, all_bytes[index]);
+                    println!("{}{}{}", lino(index, radix), n_padding, all_bytes[index]);
                 },
                 'x' => {
                     match radix {
@@ -493,8 +504,18 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     });
                 }
                 '\n' => {
-                    print_one_byte(all_bytes[index]);
-                    index += 1;
+                    let max_index = num_bytes - 1;
+                    if index > max_index {
+                        println!("? (current index {} > last byte number {}", index, max_index);
+                    }
+                    else if index == max_index {
+                        println!("? (Already at last byte)");
+                    }
+                    else {
+                        print_bytes(&all_bytes, index, index, Some(n_padding), width,
+                                show_byte_numbers);
+                        index += 1;
+                    }
                 }
                 'p' => {
                     skip_bad_range!(command, all_bytes);
