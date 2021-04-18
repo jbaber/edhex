@@ -463,6 +463,9 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     index = command.range.1;
                     print_one_byte(all_bytes[index]);
                 },
+                '?' => {
+                    print_help();
+                },
                 'h' => {
                     print_help();
                 },
