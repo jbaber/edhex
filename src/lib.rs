@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -111,35 +112,30 @@ impl Command {
 
 
     fn from_index_and_line(index: usize, line: &str,
-            max_index: usize, radix: Option<u32>) -> Result<Command, String> {
-        let radix = radix.unwrap_or(16);
-
+            max_index: usize, radix: u32) -> Result<Command, String> {
         // TODO Make these constants outside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
         let re_blank_line = Regex::new(r"^ *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?nNpxXq]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxq]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
-        let re_width = Regex::new(r"^ *W *(?P<width>[0-9]+) *$").unwrap();
+        let re_width = Regex::new(r"^ *W *(?P<width>[0-9A-Fa-f]+) *$").unwrap();
 
+        let is_blank_line          = re_blank_line.is_match(line);
         let is_single_char_command = re_single_char_command.is_match(line);
-        let is_width               = re_width.is_match(line);
         let is_range               = re_range.is_match(line);
         let is_specified_index     = re_specified_index.is_match(line);
         let is_offset_index        = re_offset_index.is_match(line);
-        let is_blank_line          = re_blank_line.is_match(line);
+        let is_width               = re_width.is_match(line);
 
-        let re = if is_single_char_command {
-            re_single_char_command
-        }
-        else if is_blank_line {
+        let re = if is_blank_line {
             re_blank_line
         }
-        else if is_width {
-            re_width
+        else if is_single_char_command {
+            re_single_char_command
         }
         else if is_range {
             re_range
@@ -149,6 +145,9 @@ impl Command {
         }
         else if is_offset_index {
             re_offset_index
+        }
+        else if is_width {
+            re_width
         }
         else {
             re_matches_nothing
@@ -277,6 +276,16 @@ impl Command {
         else {
             Err(format!("Unable to parse '{}'", line.trim()))
         }
+    }
+}
+
+
+fn string_from_radix(radix: u32) -> String {
+    if radix == 10 {
+        "decimal".to_owned()
+    }
+    else {
+        "hex".to_owned()
     }
 }
 
@@ -438,16 +447,21 @@ fn print_bytes(state:&State) {
                 print!("{}{}", i, state.n_padding);
             }
             else {
-                print!(" ");
+                print!("{:x}{}", i, state.n_padding);
             }
         }
-        println!("{}", formatted_byte(all_bytes[to_index], true));
+        print!("{}", formatted_byte(state.all_bytes[i], true));
+
+        if i == to_index {
+            println!();
+        }
+        else if state.width != 0 && i % state.width == 0 {
+            println!();
+        }
+        else {
+            print!(" ");
+        }
     }
-}
-
-
-fn print_one_byte(byte:u8) {
-    println!("{}", formatted_byte(byte, true));
 }
 
 
@@ -468,12 +482,44 @@ fn number_dot_dollar(index:usize, max_index:usize, input:&str, radix:u32)
 }
 
 
-fn lino(line_number:usize, radix:Option<u32>) -> String {
-    if radix == Some(10) {
-        format!("{}", line_number)
+fn hex_unless_dec(number:usize, radix:u32) -> String {
+    if radix == 10 {
+        format!("{}", number)
     }
     else {
-        format!("{:x}", line_number)
+        format!("{:x}", number)
+    }
+}
+
+
+fn lino(state:&State) -> String {
+    hex_unless_dec(state.index, state.radix)
+}
+
+
+struct State {
+    radix: u32,
+    show_byte_numbers: bool,
+
+    /* Current byte number, 0 to len -1 */
+    index: usize,
+
+    /* 0 Means no width */
+    width: usize,
+
+    /* The bytes in memory */
+    all_bytes: Vec<u8>,
+
+    /* Spaces to put between a byte number and a byte when displaying */
+    n_padding: String,
+}
+
+
+impl fmt::Debug for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "radix: {}|show_byte_numbers: {}|index: {}|width: {}|n_padding: '{}'|",
+                self.radix, self.show_byte_numbers, self.index, self.width,
+                self.n_padding)
     }
 }
 
@@ -488,7 +534,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
         }
     };
 
-    let mut num_bytes = match num_bytes_or_die(&file) {
+    let original_num_bytes = match num_bytes_or_die(&file) {
         Ok(num_bytes) => {
             num_bytes
         },
@@ -496,9 +542,6 @@ pub fn actual_runtime(filename: &str) -> i32 {
             return errcode;
         }
     };
-
-    // TODO calculate based on longest possible index
-    let n_padding = "     ";
 
     /* Read all bytes into memory just like real ed */
     // TODO A real hex editor needs to buffer
@@ -509,9 +552,9 @@ pub fn actual_runtime(filename: &str) -> i32 {
             return 4;
         },
         Ok(num_bytes_read) => {
-            if num_bytes_read != num_bytes {
+            if num_bytes_read != original_num_bytes {
                 println!("Only read {} of {} bytes of {}", num_bytes_read,
-                        num_bytes, filename);
+                        original_num_bytes, filename);
                 return 5;
             }
         }
@@ -519,12 +562,20 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
 
     // TODO Below here should be a function called main_loop()
-    let mut index = num_bytes - 1;
-    let mut width: Option<usize> = None;
-    let mut show_byte_numbers = true;
-    let mut radix = Some(16);
+    let mut state = State{
+        radix: 16,
+        show_byte_numbers: true,
+        index: 0,
+        width: 0,
+        all_bytes: all_bytes,
+        // TODO calculate based on longest possible index
+        n_padding: "      ".to_owned(),
+    };
 
-    println!("? for help\n\n{}", lino(index, radix));
+    // TODO Handle new file with *no* bytes yet.
+    println!("{} bytes\n? for help\n",
+            hex_unless_dec(state.all_bytes.len(), state.radix));
+    print_bytes(&state);
     loop {
         print!("*");
         io::stdout().flush().unwrap();
@@ -535,89 +586,119 @@ pub fn actual_runtime(filename: &str) -> i32 {
             }
         };
 
-        if let Ok(command) = Command::from_index_and_line(index, &input,
-                all_bytes.len() - 1, radix) {
-            // println!("0x{:?}", command);
+        if let Ok(command) = Command::from_index_and_line(state.index, &input,
+                state.all_bytes.len() - 1, state.radix) {
+            // println!("{:?}", command);
             match command.command {
+
+                /* Error */
                 'e' => {
                     println!("?");
                     continue;
                 },
+
+                /* Go to */
                 'g' => {
-                    if command.bad_range(&all_bytes) {
+                    if command.bad_range(&state.all_bytes) {
                         println!("? (bad range)");
                         continue;
                     }
-                    index = command.range.1;
-                    print_bytes(&all_bytes, index, index, Some(n_padding), width,
-                            show_byte_numbers);
+                    state.index = command.range.1;
+                    print_bytes(&state);
                 },
-                '?' => {
+
+                /* Help */
+                '?'|'h' => {
                     print_help();
                 },
-                'h' => {
-                    print_help();
-                },
+
+                /* Toggle showing byte number */
                 'n' => {
-                    show_byte_numbers = !show_byte_numbers;
-                    println!("{}", show_byte_numbers);
+                    state.show_byte_numbers = !state.show_byte_numbers;
+                    println!("{}", state.show_byte_numbers);
                 },
-                'N' => {
-                    println!("{}{}{}", lino(index, radix), n_padding, all_bytes[index]);
-                },
+
+                /* Toggle hex/dec */
                 'x' => {
-                    match radix {
-                        Some(16) => {
-                            radix = Some(10);
-                        },
-                        _ => {
-                            radix = Some(16);
-                        },
+                    state.radix = if state.radix == 16 {
+                        10
+                    }
+                    else {
+                        16
                     }
                 },
-                'X' => {
-                    println!("Input and output in {}", match radix {
-                        Some(10) => "decimal",
-                        _ => "hex",
-                    });
-                }
+
+                /* User pressed enter */
                 '\n' => {
-                    let max_index = num_bytes - 1;
-                    if index > max_index {
-                        println!("? (current index {} > last byte number {}", index, max_index);
+                    let max_index = state.all_bytes.len() - 1;
+                    if state.index > max_index {
+                        println!("? (current index {} > last byte number {}",
+                                state.index, max_index);
                     }
-                    else if index == max_index {
+                    else if state.index == max_index {
                         println!("? (Already at last byte)");
                     }
                     else {
-                        print_bytes(&all_bytes, index, index, Some(n_padding), width,
-                                show_byte_numbers);
-                        index += 1;
+                        state.index += 1;
+                        print_bytes(&state);
+                        state.index += state.width;
                     }
                 }
+
+                /* Print byte(s) */
                 'p' => {
-                    skip_bad_range!(command, all_bytes);
-                    print_bytes(&all_bytes, command.range.0, command.range.1,
-                            None, width, show_byte_numbers);
-                    index = command.range.1;
+                    skip_bad_range!(command, state.all_bytes);
+                    print_bytes(&state);
+                    state.index = command.range.1;
                 },
+
+                /* Quit */
                 'q' => {
                     return 0;
                 },
-                'W' => {
-                    width = if command.range.0 > 0 {
-                        Some(command.range.0)
+
+                /* Print state */
+                's' => {
+                    println!("At byte {} of {}", lino(&state),
+                            hex_unless_dec(state.all_bytes.len(), state.radix));
+                    if state.show_byte_numbers {
+                        println!("Printing byte numbers in {}",
+                            string_from_radix(state.radix));
+                    };
+                    println!("Interpreting input numbers as {}",
+                            string_from_radix(state.radix));
+                    if state.width == 0 {
+                        println!("Printing all bytes with no linebreaks");
                     }
                     else {
-                        None
+                        if state.radix == 10 {
+                            println!("Printing a newline every 0d{} bytes", state.width);
+                        }
+                        else {
+                            println!("Printing a newline every 0x{:x} bytes", state.width);
+                        }
                     }
                 },
+
+                /* Change width */
+                'W' => {
+                    state.width = if command.range.0 > 0 {
+                        command.range.0
+                    }
+                    else {
+                        0
+                    }
+                },
+
+                /* Catchall error */
                 _ => {
                     println!("? (Don't understand {})", command.command);
                     continue;
                 },
             }
         }
+
+        /* Couldn't parse command */
         else {
             println!("?");
             continue;
