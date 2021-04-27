@@ -347,7 +347,7 @@ fn padded_byte(byte:u8) -> String {
 }
 
 
-fn max_bytes_line(bytes:&Vec<u8>, width:usize) -> usize {
+fn max_bytes_line(bytes:&[u8], width:usize) -> usize {
     if width == 0 || bytes.len() == 0 {
         0
     }
@@ -357,7 +357,7 @@ fn max_bytes_line(bytes:&Vec<u8>, width:usize) -> usize {
 }
 
 
-fn bytes_line(bytes:&Vec<u8>, line_number:usize, width:usize) -> &[u8] {
+fn bytes_line(bytes:&[u8], line_number:usize, width:usize) -> &[u8] {
     if width == 0 {
         if line_number == 0 {
             &bytes[..]
@@ -503,37 +503,21 @@ mod tests {
 }
 
 
-fn print_bytes(state:&State) {
-    let from_index = state.index;
-    let to_index = state.index + state.width;
+fn print_bytes(state:&State, range:(usize, usize)) {
+    let bytes = &state.all_bytes[range.0..=range.1];
 
-    for i in from_index..to_index + 1 {
-// println!("|{:?}|", state);
-        // let print_byte_num = state.show_byte_numbers && (
-        //     (i == 0) ||
-        //     (state.width != 0 && i % state.width == 0)
-        // );
-        let print_byte_num = (i == 0) || ((state.width != 0) && (i % state.width == 0));
-
-        if print_byte_num {
+    for bytes_line_num in 0..max_bytes_line(bytes, state.width) {
+        if state.show_byte_numbers {
             if state.radix == 10 {
-                print!("{}{}", i, state.n_padding);
+                print!("{}{}", bytes_line_num, state.n_padding);
             }
             else {
-                print!("{:x}{}", i, state.n_padding);
+                print!("{:x}{}", bytes_line_num, state.n_padding);
             }
         }
-        print!("{}", formatted_byte(state.all_bytes[i], true));
-
-        if i == to_index {
-            println!();
-        }
-        else if state.width != 0 && i % state.width == 0 {
-            println!();
-        }
-        else {
-            print!(" ");
-        }
+        let cur_line = bytes_line(bytes, bytes_line_num, state.width)
+                .iter().map(|x| formatted_byte(*x, true)).collect::<Vec<String>>().join(" ");
+        println!("{}", cur_line);
     }
 }
 
@@ -648,7 +632,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
     // TODO Handle new file with *no* bytes yet.
     println!("{} bytes\n? for help\n",
             hex_unless_dec(state.all_bytes.len(), state.radix));
-    print_bytes(&state);
+    print_bytes(&state, (0, 0));
     loop {
         print!("*");
         io::stdout().flush().unwrap();
@@ -677,7 +661,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                         continue;
                     }
                     state.index = command.range.1;
-                    print_bytes(&state);
+                    print_bytes(&state, (state.index, state.index + state.width));
                 },
 
                 /* Help */
@@ -713,7 +697,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     }
                     else {
                         state.index += 1;
-                        print_bytes(&state);
+                        print_bytes(&state, (state.index, state.index + state.width));
                         state.index += state.width;
                     }
                 }
@@ -721,7 +705,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 /* Print byte(s) */
                 'p' => {
                     skip_bad_range!(command, state.all_bytes);
-                    print_bytes(&state);
+                    print_bytes(&state, (command.range.0, command.range.1));
                     state.index = command.range.1;
                 },
 
