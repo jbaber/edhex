@@ -9,12 +9,12 @@ use ansi_term::Color::Fixed;
 
 
 macro_rules! skip_bad_range {
-    ($command:ident, $all_bytes:ident) => {
+    ($command:expr, $all_bytes:expr) => {
         if $command.bad_range(&$all_bytes) {
             println!("? (bad range)");
             continue;
         }
-    }
+    };
 }
 
 
