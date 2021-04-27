@@ -88,18 +88,17 @@ struct Command {
 fn print_help() {
     print!("Input is interpreted as hex unless toggled to decimal with 'x'
 ?          This help
-<Enter>    Print current byte and move forward one byte
-n          Toggle whether or not byte numbers are printed before bytes
-N          Print current byte number followed by current byte
-p          Print current byte
-x          Toggle whether to interpret inputs and display output as hex or decimal
-           (and print which has resulted)
-X          Print whether inputs and line numbers are in hex or decimal
-314        Move to byte number 0x314 (or 0d314 depending on 'x') and print that byte
+<Enter>    Print current byte(s) and move forward to next set of byte(s)
+314        Move to byte number 0x314 (or 0d314 depending on 'x') and print from there
 $          Move to last byte and print it
 12,34p     Print bytes 12 - 34 inclusive, then move to byte 0x34 (or 0d34 depending on 'x')
+n          Toggle whether or not byte numbers are printed before bytes
+p          Print current byte(s) (depending on 'W')
+s          Print state of all toggles and 'W'idth
+x          Toggle whether to interpret inputs and display output as hex or decimal
 W30        Print a linebreak every 0x30 bytes (or 0d30 bytes depending on 'x')
-W0         Print bytes without linebreaks
+W0         <Enter> and 'p' print one byte at a time.  Ranges are printed without line breaks.
+           This is the default
 q          quit
 ");
 }
