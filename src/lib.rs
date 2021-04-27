@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -338,26 +339,104 @@ fn padded_byte(byte:u8) -> String {
 }
 
 
-fn print_bytes(all_bytes:&Vec<u8>, from_index: usize, to_index: usize, n_padding: Option<&str>,
-        width: Option<usize>, show_byte_numbers: bool) {
-    if n_padding.is_some() {
-        for i in from_index..to_index + 1 {
-            println!("0x{:x}{}{}", i, n_padding.unwrap(), formatted_byte(all_bytes[i], true));
+fn bytes_line(bytes:&Vec<u8>, line_number:usize, width:usize) -> &[u8] {
+    if width == 0 {
+        if line_number == 0 {
+            return &bytes[..];
+        }
+        else {
+            return &[];
         }
     }
+
+    if line_number * width < bytes.len() {
+        let end_index = min(bytes.len(), line_number * width + width);
+        return &bytes[line_number * width..end_index];
+    }
     else {
-        let mut counter: usize = 0;
-        for i in from_index..to_index {
-            counter += 1;
-            print!("{}", formatted_byte(all_bytes[i], true));
-            if let Some(w) = width {
-                if counter >= w {
-                    counter = 0;
-                    println!();
-                }
-                else {
-                    print!(" ");
-                }
+        return &[];
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_padded_byte() {
+        assert_eq!(padded_byte(2), "02");
+        assert_eq!(padded_byte(10), "0a");
+    }
+
+    #[test]
+    fn test_bytes_line() {
+        let bytes = vec![8, 6, 7, 5, 3, 0, 9,];
+        assert_eq!(bytes_line(&bytes, 0, 0).to_owned(), vec![8, 6, 7, 5, 3, 0, 9,]);
+        assert_eq!(bytes_line(&bytes, 1, 0).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 2, 0).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 3, 0).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 1).to_owned(), vec![8,]);
+        assert_eq!(bytes_line(&bytes, 1, 1).to_owned(), vec![6,]);
+        assert_eq!(bytes_line(&bytes, 2, 1).to_owned(), vec![7,]);
+        assert_eq!(bytes_line(&bytes, 3, 1).to_owned(), vec![5,]);
+        assert_eq!(bytes_line(&bytes, 4, 1).to_owned(), vec![3,]);
+        assert_eq!(bytes_line(&bytes, 5, 1).to_owned(), vec![0,]);
+        assert_eq!(bytes_line(&bytes, 6, 1).to_owned(), vec![9,]);
+        assert_eq!(bytes_line(&bytes, 7, 1).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 8, 1).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 9, 1).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 2).to_owned(), vec![8, 6,]);
+        assert_eq!(bytes_line(&bytes, 1, 2).to_owned(), vec![7, 5,]);
+        assert_eq!(bytes_line(&bytes, 2, 2).to_owned(), vec![3, 0,]);
+        assert_eq!(bytes_line(&bytes, 3, 2).to_owned(), vec![9,]);
+        assert_eq!(bytes_line(&bytes, 4, 2).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 5, 2).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 3).to_owned(), vec![8, 6, 7,]);
+        assert_eq!(bytes_line(&bytes, 1, 3).to_owned(), vec![5, 3, 0,]);
+        assert_eq!(bytes_line(&bytes, 2, 3).to_owned(), vec![9,]);
+        assert_eq!(bytes_line(&bytes, 3, 3).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 4, 3).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 4).to_owned(), vec![8, 6, 7, 5,]);
+        assert_eq!(bytes_line(&bytes, 1, 4).to_owned(), vec![3, 0, 9,]);
+        assert_eq!(bytes_line(&bytes, 2, 4).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 3, 4).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 4, 4).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 5).to_owned(), vec![8, 6, 7, 5, 3,]);
+        assert_eq!(bytes_line(&bytes, 1, 5).to_owned(), vec![0, 9,]);
+        assert_eq!(bytes_line(&bytes, 2, 5).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 3, 5).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 6).to_owned(), vec![8, 6, 7, 5, 3, 0,]);
+        assert_eq!(bytes_line(&bytes, 1, 6).to_owned(), vec![9,]);
+        assert_eq!(bytes_line(&bytes, 2, 6).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 3, 6).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 7).to_owned(), vec![8, 6, 7, 5, 3, 0, 9,]);
+        assert_eq!(bytes_line(&bytes, 1, 7).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 2, 7).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 3, 7).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 8).to_owned(), vec![8, 6, 7, 5, 3, 0, 9,]);
+        assert_eq!(bytes_line(&bytes, 1, 8).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 2, 8).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 3, 8).to_owned(), vec![]);
+    }
+}
+
+
+fn print_bytes(state:&State) {
+    let from_index = state.index;
+    let to_index = state.index + state.width;
+
+    for i in from_index..to_index + 1 {
+// println!("|{:?}|", state);
+        // let print_byte_num = state.show_byte_numbers && (
+        //     (i == 0) ||
+        //     (state.width != 0 && i % state.width == 0)
+        // );
+        let print_byte_num = (i == 0) || ((state.width != 0) && (i % state.width == 0));
+
+        if print_byte_num {
+            if state.radix == 10 {
+                print!("{}{}", i, state.n_padding);
             }
             else {
                 print!(" ");
