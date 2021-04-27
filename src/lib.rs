@@ -347,22 +347,33 @@ fn padded_byte(byte:u8) -> String {
 }
 
 
+fn max_bytes_line(bytes:&Vec<u8>, width:usize) -> usize {
+    if width == 0 || bytes.len() == 0 {
+        0
+    }
+    else {
+        (bytes.len() - 1) / width
+    }
+}
+
+
 fn bytes_line(bytes:&Vec<u8>, line_number:usize, width:usize) -> &[u8] {
     if width == 0 {
         if line_number == 0 {
-            return &bytes[..];
+            &bytes[..]
         }
         else {
-            return &[];
+            &[]
         }
     }
 
-    if line_number * width < bytes.len() {
+    else if line_number * width < bytes.len() {
         let end_index = min(bytes.len(), line_number * width + width);
-        return &bytes[line_number * width..end_index];
+        &bytes[line_number * width..end_index]
     }
+
     else {
-        return &[];
+        &[]
     }
 }
 
@@ -378,7 +389,69 @@ mod tests {
     }
 
     #[test]
+    fn test_max_bytes_line() {
+        let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 12);
+        let bytes = vec![8, 6, 7, 5, 3, 0, 9,];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 6);
+        assert_eq!(max_bytes_line(&bytes, 2), 3);
+        assert_eq!(max_bytes_line(&bytes, 3), 2);
+        assert_eq!(max_bytes_line(&bytes, 4), 1);
+        assert_eq!(max_bytes_line(&bytes, 5), 1);
+        assert_eq!(max_bytes_line(&bytes, 6), 1);
+        assert_eq!(max_bytes_line(&bytes, 7), 0);
+        assert_eq!(max_bytes_line(&bytes, 8), 0);
+        let bytes = vec![8, 6, 7, 5, 3, 0,];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 5);
+        assert_eq!(max_bytes_line(&bytes, 2), 2);
+        assert_eq!(max_bytes_line(&bytes, 3), 1);
+        assert_eq!(max_bytes_line(&bytes, 4), 1);
+        assert_eq!(max_bytes_line(&bytes, 5), 1);
+        assert_eq!(max_bytes_line(&bytes, 6), 0);
+        assert_eq!(max_bytes_line(&bytes, 7), 0);
+        assert_eq!(max_bytes_line(&bytes, 8), 0);
+        let bytes = vec![8, 6, 7,];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 2);
+        assert_eq!(max_bytes_line(&bytes, 2), 1);
+        assert_eq!(max_bytes_line(&bytes, 3), 0);
+        assert_eq!(max_bytes_line(&bytes, 4), 0);
+        assert_eq!(max_bytes_line(&bytes, 5), 0);
+        let bytes = vec![8, 6,];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 1);
+        assert_eq!(max_bytes_line(&bytes, 2), 0);
+        assert_eq!(max_bytes_line(&bytes, 3), 0);
+        assert_eq!(max_bytes_line(&bytes, 4), 0);
+        let bytes = vec![8,];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 0);
+        assert_eq!(max_bytes_line(&bytes, 2), 0);
+        assert_eq!(max_bytes_line(&bytes, 3), 0);
+        assert_eq!(max_bytes_line(&bytes, 4), 0);
+        let bytes = vec![];
+        assert_eq!(max_bytes_line(&bytes, 0), 0);
+        assert_eq!(max_bytes_line(&bytes, 1), 0);
+        assert_eq!(max_bytes_line(&bytes, 2), 0);
+        assert_eq!(max_bytes_line(&bytes, 3), 0);
+        assert_eq!(max_bytes_line(&bytes, 4), 0);
+    }
+
+    #[test]
     fn test_bytes_line() {
+        let bytes = vec![];
+        assert_eq!(bytes_line(&bytes, 0, 0).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 1).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 0, 2).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 1, 0).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 1, 1).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 1, 2).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 2, 0).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 2, 1).to_owned(), vec![]);
+        assert_eq!(bytes_line(&bytes, 2, 2).to_owned(), vec![]);
         let bytes = vec![8, 6, 7, 5, 3, 0, 9,];
         assert_eq!(bytes_line(&bytes, 0, 0).to_owned(), vec![8, 6, 7, 5, 3, 0, 9,]);
         assert_eq!(bytes_line(&bytes, 1, 0).to_owned(), vec![]);
