@@ -93,9 +93,15 @@ fn print_help() {
 <Enter>    Print current byte(s) and move forward to next set of byte(s)
 314        Move to byte number 0x314 (or 0d314 depending on 'x') and print from
                there
++          Move 1 byte forward and print from there
+-          Move 1 byte back and print from there
++314       Move 0x314 bytes forward (or 0d314 depending on 'x') and print from
+               there
+-314       Move 0x314 bytes back (or 0d314 depending on 'x') and print from
+               there
 $          Move to last byte and print it
-12,34p     Print bytes 12 - 34 inclusive, then move to byte 0x34
-               (or 0d34 depending on 'x')
+12,34p     Print bytes 12 - 34 inclusive (depending on 'x'), then move to
+                leftmost byte printed on the last line.
 n          Toggle whether or not byte numbers are printed before bytes
 p          Print current byte(s) (depending on 'W')
 s          Print state of all toggles and 'W'idth
