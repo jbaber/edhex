@@ -718,7 +718,6 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     let last_byte_to_show_index = min(
                             first_byte_to_show_index + width - 1,
                                     max_index);
-println!("{} - {}", hex_unless_dec(first_byte_to_show_index, state.radix), hex_unless_dec(last_byte_to_show_index, state.radix));
                     if first_byte_to_show_index > max_index {
                         println!("? (already showing last byte at index {})",
                                 hex_unless_dec(last_byte_to_show_index,
