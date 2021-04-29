@@ -107,14 +107,19 @@ q          quit
 }
 
 
+fn bad_range(bytes: &Vec<u8>, range: (usize, usize)) -> bool {
+    bytes.len() == 0 || range.1 >= bytes.len()
+}
+
+
 impl Command {
     fn bad_range(&self, all_bytes: &Vec<u8>) -> bool {
-        all_bytes.len() == 0 || self.range.1 >= all_bytes.len()
+        bad_range(all_bytes, self.range)
     }
 
 
     fn from_index_and_line(index: usize, line: &str,
-            max_index: usize, radix: u32) -> Result<Command, String> {
+            _max_index: usize, radix: u32) -> Result<Command, String> {
         // TODO Make these constants outside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
@@ -158,9 +163,16 @@ impl Command {
         let caps = re.captures(line);
 
         if is_single_char_command {
+            let command = caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap();
             Ok(Command{
                 range: (0, 0),
-                command: caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap(),
+                command:
+                        if command == 'p' {
+                            'Q'
+                        }
+                        else {
+                            command
+                        },
                 args: vec![],
             })
         }
@@ -191,7 +203,7 @@ impl Command {
         else if is_range {
             // println!("is_range");
             let caps = caps.unwrap();
-            let begin = number_dot_dollar(index, max_index,
+            let begin = number_dot_dollar(index, _max_index,
                     caps.name("begin").unwrap().as_str(), radix);
             if begin.is_err() {
                 // Why on Earth doesn't this work?
@@ -199,7 +211,7 @@ impl Command {
                 return Err("Can't understand beginning of range.".to_owned());
             }
             let begin = begin.unwrap();
-            let end = number_dot_dollar(index, max_index,
+            let end = number_dot_dollar(index, _max_index,
                     caps.name("end").unwrap().as_str(), radix);
             if end.is_err() {
                 // Why on Earth doesn't this work?
@@ -224,7 +236,7 @@ impl Command {
         else if is_specified_index {
             // println!("is_specified_index");
             let caps = caps.unwrap();
-            let specific_index = number_dot_dollar(index, max_index,
+            let specific_index = number_dot_dollar(index, _max_index,
                     caps.name("index").unwrap().as_str(), radix);
             if specific_index.is_err() {
                 // Why on Earth doesn't this work?
@@ -241,10 +253,19 @@ impl Command {
                 })
             }
             else {
+                let command = the_rest.chars().next().unwrap();
+                let args = the_rest[1..].split_whitespace()
+                        .map(|x| x.to_owned()).collect();
                 Ok(Command{
                     range: (specific_index, specific_index),
-                    command: the_rest.chars().next().unwrap(),
-                    args: the_rest[1..].split_whitespace().map(|x| x.to_owned()).collect(),
+                    command:
+                        if command == 'p' {
+                            'P'
+                        }
+                        else {
+                          command
+                        },
+                    args: args,
                 })
             }
         }
@@ -521,12 +542,23 @@ fn print_state(state:&State) {
 }
 
 
-fn print_bytes(state:&State, range:(usize, usize)) {
-    let bytes = &state.all_bytes[range.0..=range.1];
+/// returns index of the byte in the 0-th column of the last row printed
+fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
+    let from = range.0;
+    let to = min(max_index(&state), range.1);
+    if bad_range(&state.all_bytes, (from, to)) {
+      println!("? (Bad range: ({}, {}))", range.0, range.1);
+      return None;
+    }
+
+    let bytes = &state.all_bytes[from..=to];
     let max_bytes_line_num = max_bytes_line(bytes, state.width);
+    let mut left_col_byte_num = from;
     for bytes_line_num in 0..=max_bytes_line_num {
+        if bytes_line_num != 0 {
+            left_col_byte_num += usize::from(state.width);
+        }
         if state.show_byte_numbers {
-            let left_col_byte_num = range.0 + bytes_line_num * usize::from(state.width);
             if state.radix == 10 {
                 print!("{:>5}{}", left_col_byte_num, state.n_padding);
             }
@@ -537,14 +569,16 @@ fn print_bytes(state:&State, range:(usize, usize)) {
         let cur_line = bytes_line(bytes, bytes_line_num, state.width)
                 .iter().map(|x| formatted_byte(*x, true)).collect::<Vec<String>>().join(" ");
         println!("{}", cur_line);
+        left_col_byte_num = from + bytes_line_num * usize::from(state.width);
     }
+    Some(left_col_byte_num)
 }
 
 
-fn number_dot_dollar(index:usize, max_index:usize, input:&str, radix:u32)
+fn number_dot_dollar(index:usize, _max_index:usize, input:&str, radix:u32)
         -> Result<usize, String> {
     match input {
-        "$" => Ok(max_index),
+        "$" => Ok(_max_index),
         "." => Ok(index),
         something_else => {
             if let Ok(number) = usize::from_str_radix(input, radix) {
@@ -601,6 +635,11 @@ impl fmt::Debug for State {
 
 fn range(state:&State) -> (usize, usize) {
     (state.index, state.index + usize::from(state.width) - 1)
+}
+
+
+fn max_index(state:&State) -> usize {
+    state.all_bytes.len() - 1
 }
 
 
@@ -713,12 +752,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 /* User pressed enter */
                 '\n' => {
                     let width = usize::from(state.width);
-                    let max_index = state.all_bytes.len() - 1;
                     let first_byte_to_show_index = state.index + width;
                     let last_byte_to_show_index = min(
                             first_byte_to_show_index + width - 1,
-                                    max_index);
-                    if first_byte_to_show_index > max_index {
+                                    max_index(&state));
+                    if first_byte_to_show_index > max_index(&state) {
                         println!("? (already showing last byte at index {})",
                                 hex_unless_dec(last_byte_to_show_index,
                                         state.radix));
@@ -730,11 +768,33 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     }
                 }
 
-                /* Print byte(s) */
+                /* Print byte(s) at one place, width long */
+                'P' => {
+                    skip_bad_range!(command, state.all_bytes);
+                    state.index = command.range.0;
+                    if let Some(last_left_col_index) = print_bytes(&state, range(&state)) {
+                        state.index = last_left_col_index;
+                    }
+                    else {
+                        println!("? (bad range {:?}", range(&state));
+                    }
+                },
+
+                /* Print byte(s) with range */
                 'p' => {
                     skip_bad_range!(command, state.all_bytes);
-                    print_bytes(&state, (command.range.0, command.range.1));
-                    state.index = command.range.1;
+                    state.index = command.range.0;
+                    if let Some(last_left_col_index) = print_bytes(&state, (command.range.0, command.range.1)) {
+                    state.index = last_left_col_index;
+                    }
+                    else {
+                        println!("? (bad range {:?}", command.range);
+                    }
+                },
+
+                /* Print byte(s) at *current* place, width long */
+                'Q' => {
+                    print_bytes(&state, range(&state));
                 },
 
                 /* Quit */
