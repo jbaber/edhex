@@ -503,6 +503,29 @@ mod tests {
 }
 
 
+fn print_state(state:&State) {
+    println!("At byte {} of {}", lino(&state),
+            hex_unless_dec(state.all_bytes.len(), state.radix));
+    if state.show_byte_numbers {
+        println!("Printing byte numbers in {}",
+            string_from_radix(state.radix));
+    };
+    println!("Interpreting input numbers as {}",
+            string_from_radix(state.radix));
+    if state.width == 0 {
+        println!("Printing all bytes with no linebreaks");
+    }
+    else {
+        if state.radix == 10 {
+            println!("Printing a newline every 0d{} bytes", state.width);
+        }
+        else {
+            println!("Printing a newline every 0x{:x} bytes", state.width);
+        }
+    }
+}
+
+
 fn print_bytes(state:&State, range:(usize, usize)) {
     let bytes = &state.all_bytes[range.0..=range.1];
 
@@ -632,6 +655,8 @@ pub fn actual_runtime(filename: &str) -> i32 {
     // TODO Handle new file with *no* bytes yet.
     println!("{} bytes\n? for help\n",
             hex_unless_dec(state.all_bytes.len(), state.radix));
+    print_state(&state);
+    println!();
     print_bytes(&state, (0, 0));
     loop {
         print!("*");
@@ -716,25 +741,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                 /* Print state */
                 's' => {
-                    println!("At byte {} of {}", lino(&state),
-                            hex_unless_dec(state.all_bytes.len(), state.radix));
-                    if state.show_byte_numbers {
-                        println!("Printing byte numbers in {}",
-                            string_from_radix(state.radix));
-                    };
-                    println!("Interpreting input numbers as {}",
-                            string_from_radix(state.radix));
-                    if state.width == 0 {
-                        println!("Printing all bytes with no linebreaks");
-                    }
-                    else {
-                        if state.radix == 10 {
-                            println!("Printing a newline every 0d{} bytes", state.width);
-                        }
-                        else {
-                            println!("Printing a newline every 0x{:x} bytes", state.width);
-                        }
-                    }
+                    print_state(&state);
                 },
 
                 /* Change width */
