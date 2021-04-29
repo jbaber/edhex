@@ -124,6 +124,8 @@ impl Command {
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
         let re_blank_line = Regex::new(r"^ *$").unwrap();
+        let re_plus = Regex::new(r"^ *\+ *$").unwrap();
+        let re_minus = Regex::new(r"^ *\- *$").unwrap();
         let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxq]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
@@ -133,6 +135,8 @@ impl Command {
 
         let is_blank_line          = re_blank_line.is_match(line);
         let is_single_char_command = re_single_char_command.is_match(line);
+        let is_plus                = re_plus.is_match(line);
+        let is_minus               = re_minus.is_match(line);
         let is_range               = re_range.is_match(line);
         let is_specified_index     = re_specified_index.is_match(line);
         let is_offset_index        = re_offset_index.is_match(line);
@@ -143,6 +147,12 @@ impl Command {
         }
         else if is_single_char_command {
             re_single_char_command
+        }
+        else if is_plus {
+            re_plus
+        }
+        else if is_minus {
+            re_minus
         }
         else if is_range {
             re_range
@@ -162,19 +172,36 @@ impl Command {
 
         let caps = re.captures(line);
 
-        if is_single_char_command {
-            let command = caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap();
+        if is_plus {
             Ok(Command{
                 range: (0, 0),
-                command:
-                        if command == 'p' {
-                            'Q'
-                        }
-                        else {
-                            command
-                        },
+                command: 'G',
                 args: vec![],
             })
+        }
+        else if is_minus {
+            Ok(Command{
+                range: (0, 0),
+                command: 'H',
+                args: vec![],
+            })
+        }
+        else if is_single_char_command {
+            let command = caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap();
+            if command == 'p' {
+                Ok(Command{
+                    range: (0, 0),
+                    command: 'Q',
+                    args: vec![],
+                })
+            }
+            else {
+                Ok(Command{
+                    range: (0, 0),
+                    command: command,
+                    args: vec![],
+                })
+            }
         }
 
         else if is_blank_line {
@@ -273,7 +300,12 @@ impl Command {
         else if is_offset_index {
             // println!("is_specified_index");
             let caps = caps.unwrap();
-            let index_offset = usize::from_str_radix(caps.name("offset").unwrap().as_str(), radix).unwrap();
+            let as_string = caps.name("offset").unwrap().as_str();
+            let index_offset = usize::from_str_radix(as_string, radix);
+            if index_offset.is_err() {
+                return Err(format!("{} is not a number", as_string));
+            }
+            let index_offset = index_offset.unwrap();
             let sign = caps.name("sign").unwrap().as_str();
             let begin = match sign {
                 "+" => index + index_offset,
@@ -726,6 +758,31 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     }
                     state.index = command.range.1;
                     print_bytes(&state, range(&state));
+                },
+
+                /* + */
+                'G' => {
+                    if state.index == max_index(&state) {
+                        println!("? (already at last byte");
+                    }
+                    else if state.index > max_index(&state) {
+                        println!("? (past last byte");
+                    }
+                    else {
+                        state.index += 1;
+                        print_bytes(&state, range(&state));
+                    }
+                },
+
+                /* - */
+                'H' => {
+                    if state.index == 0 {
+                        println!("? (already at 0th byte");
+                    }
+                    else {
+                        state.index -= 1;
+                        print_bytes(&state, range(&state));
+                    }
                 },
 
                 /* Help */
