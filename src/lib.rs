@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -90,16 +91,17 @@ fn print_help() {
     print!("Input is interpreted as hex unless toggled to decimal with 'x'
 ?          This help
 <Enter>    Print current byte(s) and move forward to next set of byte(s)
-314        Move to byte number 0x314 (or 0d314 depending on 'x') and print from there
+314        Move to byte number 0x314 (or 0d314 depending on 'x') and print from
+               there
 $          Move to last byte and print it
-12,34p     Print bytes 12 - 34 inclusive, then move to byte 0x34 (or 0d34 depending on 'x')
+12,34p     Print bytes 12 - 34 inclusive, then move to byte 0x34
+               (or 0d34 depending on 'x')
 n          Toggle whether or not byte numbers are printed before bytes
 p          Print current byte(s) (depending on 'W')
 s          Print state of all toggles and 'W'idth
-x          Toggle whether to interpret inputs and display output as hex or decimal
+x          Toggle interpreting inputs and displaying output as hex or decimal
 W30        Print a linebreak every 0x30 bytes (or 0d30 bytes depending on 'x')
-W0         <Enter> and 'p' print one byte at a time.  Ranges are printed without line breaks.
-           This is the default
+               [Default 0x10]
 q          quit
 ");
 }
@@ -174,12 +176,16 @@ impl Command {
         else if is_width {
             // println!("is_width");
             let caps = caps.unwrap();
-            let width = usize::from_str_radix(caps.name("width").unwrap().as_str(), radix).unwrap();
-            Ok(Command{
-                range: (width, width),
-                command: 'W',
-                args: vec![],
-            })
+            if let Some(width) = NonZeroUsize::new(usize::from_str_radix(caps.name("width").unwrap().as_str(), radix).unwrap()) {
+              Ok(Command{
+                  range: (usize::from(width), usize::from(width)),
+                  command: 'W',
+                  args: vec![],
+              })
+            }
+            else {
+                Err("Width must be positive".to_owned())
+            }
         }
 
         else if is_range {
@@ -347,27 +353,19 @@ fn padded_byte(byte:u8) -> String {
 }
 
 
-fn max_bytes_line(bytes:&[u8], width:usize) -> usize {
-    if width == 0 || bytes.len() == 0 {
+fn max_bytes_line(bytes:&[u8], width:NonZeroUsize) -> usize {
+    if bytes.len() == 0 {
         0
     }
     else {
-        (bytes.len() - 1) / width
+        (bytes.len() - 1) / usize::from(width)
     }
 }
 
 
-fn bytes_line(bytes:&[u8], line_number:usize, width:usize) -> &[u8] {
-    if width == 0 {
-        if line_number == 0 {
-            &bytes[..]
-        }
-        else {
-            &[]
-        }
-    }
-
-    else if line_number * width < bytes.len() {
+fn bytes_line(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> &[u8] {
+    let width = usize::from(width);
+    if line_number * width < bytes.len() {
         let end_index = min(bytes.len(), line_number * width + width);
         &bytes[line_number * width..end_index]
     }
@@ -391,10 +389,8 @@ mod tests {
     #[test]
     fn test_max_bytes_line() {
         let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 12);
         let bytes = vec![8, 6, 7, 5, 3, 0, 9,];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 6);
         assert_eq!(max_bytes_line(&bytes, 2), 3);
         assert_eq!(max_bytes_line(&bytes, 3), 2);
@@ -404,7 +400,6 @@ mod tests {
         assert_eq!(max_bytes_line(&bytes, 7), 0);
         assert_eq!(max_bytes_line(&bytes, 8), 0);
         let bytes = vec![8, 6, 7, 5, 3, 0,];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 5);
         assert_eq!(max_bytes_line(&bytes, 2), 2);
         assert_eq!(max_bytes_line(&bytes, 3), 1);
@@ -414,26 +409,22 @@ mod tests {
         assert_eq!(max_bytes_line(&bytes, 7), 0);
         assert_eq!(max_bytes_line(&bytes, 8), 0);
         let bytes = vec![8, 6, 7,];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 2);
         assert_eq!(max_bytes_line(&bytes, 2), 1);
         assert_eq!(max_bytes_line(&bytes, 3), 0);
         assert_eq!(max_bytes_line(&bytes, 4), 0);
         assert_eq!(max_bytes_line(&bytes, 5), 0);
         let bytes = vec![8, 6,];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 1);
         assert_eq!(max_bytes_line(&bytes, 2), 0);
         assert_eq!(max_bytes_line(&bytes, 3), 0);
         assert_eq!(max_bytes_line(&bytes, 4), 0);
         let bytes = vec![8,];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 0);
         assert_eq!(max_bytes_line(&bytes, 2), 0);
         assert_eq!(max_bytes_line(&bytes, 3), 0);
         assert_eq!(max_bytes_line(&bytes, 4), 0);
         let bytes = vec![];
-        assert_eq!(max_bytes_line(&bytes, 0), 0);
         assert_eq!(max_bytes_line(&bytes, 1), 0);
         assert_eq!(max_bytes_line(&bytes, 2), 0);
         assert_eq!(max_bytes_line(&bytes, 3), 0);
@@ -443,20 +434,13 @@ mod tests {
     #[test]
     fn test_bytes_line() {
         let bytes = vec![];
-        assert_eq!(bytes_line(&bytes, 0, 0).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 0, 1).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 0, 2).to_owned(), vec![]);
-        assert_eq!(bytes_line(&bytes, 1, 0).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 1, 1).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 1, 2).to_owned(), vec![]);
-        assert_eq!(bytes_line(&bytes, 2, 0).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 2, 1).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 2, 2).to_owned(), vec![]);
         let bytes = vec![8, 6, 7, 5, 3, 0, 9,];
-        assert_eq!(bytes_line(&bytes, 0, 0).to_owned(), vec![8, 6, 7, 5, 3, 0, 9,]);
-        assert_eq!(bytes_line(&bytes, 1, 0).to_owned(), vec![]);
-        assert_eq!(bytes_line(&bytes, 2, 0).to_owned(), vec![]);
-        assert_eq!(bytes_line(&bytes, 3, 0).to_owned(), vec![]);
         assert_eq!(bytes_line(&bytes, 0, 1).to_owned(), vec![8,]);
         assert_eq!(bytes_line(&bytes, 1, 1).to_owned(), vec![6,]);
         assert_eq!(bytes_line(&bytes, 2, 1).to_owned(), vec![7,]);
@@ -512,30 +496,26 @@ fn print_state(state:&State) {
     };
     println!("Interpreting input numbers as {}",
             string_from_radix(state.radix));
-    if state.width == 0 {
-        println!("Printing all bytes with no linebreaks");
+    if state.radix == 10 {
+        println!("Printing a newline every 0d{} bytes", state.width);
     }
     else {
-        if state.radix == 10 {
-            println!("Printing a newline every 0d{} bytes", state.width);
-        }
-        else {
-            println!("Printing a newline every 0x{:x} bytes", state.width);
-        }
+        println!("Printing a newline every 0x{:x} bytes", state.width);
     }
 }
 
 
 fn print_bytes(state:&State, range:(usize, usize)) {
     let bytes = &state.all_bytes[range.0..=range.1];
-
-    for bytes_line_num in 0..max_bytes_line(bytes, state.width) {
+    let max_bytes_line_num = max_bytes_line(bytes, state.width);
+    for bytes_line_num in 0..=max_bytes_line_num {
         if state.show_byte_numbers {
+            let left_col_byte_num = range.0 + bytes_line_num * usize::from(state.width);
             if state.radix == 10 {
-                print!("{}{}", bytes_line_num, state.n_padding);
+                print!("{:>5}{}", left_col_byte_num, state.n_padding);
             }
             else {
-                print!("{:x}{}", bytes_line_num, state.n_padding);
+                print!("{:>5x}{}", left_col_byte_num, state.n_padding);
             }
         }
         let cur_line = bytes_line(bytes, bytes_line_num, state.width)
@@ -584,8 +564,7 @@ struct State {
     /* Current byte number, 0 to len -1 */
     index: usize,
 
-    /* 0 Means no width */
-    width: usize,
+    width: NonZeroUsize,
 
     /* The bytes in memory */
     all_bytes: Vec<u8>,
@@ -601,6 +580,11 @@ impl fmt::Debug for State {
                 self.radix, self.show_byte_numbers, self.index, self.width,
                 self.n_padding)
     }
+}
+
+
+fn range(state:&State) -> (usize, usize) {
+    (state.index, state.index + usize::from(state.width) - 1)
 }
 
 
@@ -646,7 +630,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
         radix: 16,
         show_byte_numbers: true,
         index: 0,
-        width: 0,
+        width: NonZeroUsize::new(16).unwrap(),
         all_bytes: all_bytes,
         // TODO calculate based on longest possible index
         n_padding: "      ".to_owned(),
@@ -657,7 +641,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
             hex_unless_dec(state.all_bytes.len(), state.radix));
     print_state(&state);
     println!();
-    print_bytes(&state, (0, 0));
+    print_bytes(&state, range(&state));
     loop {
         print!("*");
         io::stdout().flush().unwrap();
@@ -686,7 +670,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                         continue;
                     }
                     state.index = command.range.1;
-                    print_bytes(&state, (state.index, state.index + state.width));
+                    print_bytes(&state, range(&state));
                 },
 
                 /* Help */
@@ -712,18 +696,22 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                 /* User pressed enter */
                 '\n' => {
+                    let width = usize::from(state.width);
                     let max_index = state.all_bytes.len() - 1;
-                    if state.index > max_index {
-                        println!("? (current index {} > last byte number {}",
-                                state.index, max_index);
-                    }
-                    else if state.index == max_index {
-                        println!("? (Already at last byte)");
+                    let first_byte_to_show_index = state.index + width;
+                    let last_byte_to_show_index = min(
+                            first_byte_to_show_index + width - 1,
+                                    max_index);
+println!("{} - {}", hex_unless_dec(first_byte_to_show_index, state.radix), hex_unless_dec(last_byte_to_show_index, state.radix));
+                    if first_byte_to_show_index > max_index {
+                        println!("? (already showing last byte at index {})",
+                                hex_unless_dec(last_byte_to_show_index,
+                                        state.radix));
                     }
                     else {
-                        state.index += 1;
-                        print_bytes(&state, (state.index, state.index + state.width));
-                        state.index += state.width;
+                        state.index = first_byte_to_show_index;
+                        print_bytes(&state, (first_byte_to_show_index,
+                                last_byte_to_show_index));
                     }
                 }
 
@@ -746,11 +734,8 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                 /* Change width */
                 'W' => {
-                    state.width = if command.range.0 > 0 {
-                        command.range.0
-                    }
-                    else {
-                        0
+                    if let Some(width) = NonZeroUsize::new(command.range.0) {
+                        state.width = width;
                     }
                 },
 
