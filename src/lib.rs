@@ -564,19 +564,15 @@ mod tests {
 
 fn print_state(state:&State) {
     println!("At byte {} of {}", lino(&state),
-            hex_unless_dec(state.all_bytes.len(), state.radix));
+            hex_unless_dec_with_radix(state.all_bytes.len(), state.radix));
     if state.show_byte_numbers {
         println!("Printing byte numbers in {}",
             string_from_radix(state.radix));
     };
     println!("Interpreting input numbers as {}",
             string_from_radix(state.radix));
-    if state.radix == 10 {
-        println!("Printing a newline every 0d{} bytes", state.width);
-    }
-    else {
-        println!("Printing a newline every 0x{:x} bytes", state.width);
-    }
+    println!("Printing a newline every {} bytes",
+            hex_unless_dec_with_radix(usize::from(state.width), state.radix));
 }
 
 
@@ -630,6 +626,18 @@ fn number_dot_dollar(index:usize, _max_index:usize, input:&str, radix:u32)
 }
 
 
+fn hex_unless_dec_with_radix(number:usize, radix:u32) -> String {
+    let letter = if radix == 10 {
+        'd'
+    }
+    else {
+        'x'
+    };
+
+    format!("0{}{}", letter, hex_unless_dec(number, radix))
+}
+
+
 fn hex_unless_dec(number:usize, radix:u32) -> String {
     if radix == 10 {
         format!("{}", number)
@@ -641,7 +649,7 @@ fn hex_unless_dec(number:usize, radix:u32) -> String {
 
 
 fn lino(state:&State) -> String {
-    hex_unless_dec(state.index, state.radix)
+    hex_unless_dec_with_radix(state.index, state.radix)
 }
 
 
