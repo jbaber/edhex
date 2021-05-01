@@ -107,6 +107,7 @@ n          Toggle whether or not byte numbers are printed before bytes
 p          Print current byte(s) (depending on 'W')
 s          Print state of all toggles and 'W'idth
 x          Toggle interpreting inputs and displaying output as hex or decimal
+w          Actually write changes to the file on disk
 W30        Print a linebreak every 0x30 bytes (or 0d30 bytes depending on 'x')
                [Default 0x10]
 q          quit
@@ -156,7 +157,7 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_plus = Regex::new(r"^ *\+ *$").unwrap();
         let re_minus = Regex::new(r"^ *\- *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqi]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqiw]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -687,6 +688,7 @@ struct State {
     radix: u32,
     show_byte_numbers: bool,
     unsaved_changes: bool,
+    filename: String,
 
     /* Current byte number, 0 to len -1 */
     index: usize,
@@ -703,9 +705,9 @@ struct State {
 
 impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "radix: {}|unsaved_changes: {}|show_byte_numbers: {}|index: {}|width: {}|n_padding: '{}'|",
+        write!(f, "radix: {}|unsaved_changes: {}|show_byte_numbers: {}|index: {}|width: {}|n_padding: '{}'|filename: {}|",
                 self.radix, self.unsaved_changes, self.show_byte_numbers,
-                self.index, self.width, self.n_padding)
+                self.index, self.width, self.n_padding, self.filename)
     }
 }
 
@@ -760,6 +762,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
     // TODO Below here should be a function called main_loop()
     let mut state = State{
         radix: 16,
+        filename: filename.to_owned(),
         show_byte_numbers: true,
         unsaved_changes: false,
         index: 0,
@@ -934,6 +937,14 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 /* Print state */
                 's' => {
                     print_state(&state);
+                },
+
+                /* Write out */
+                'w' => {
+                    let result = std::fs::write(filename, &state.all_bytes);
+                    if result.is_err() {
+                        println!("? (Couldn't write to {})", state.filename);
+                    }
                 },
 
                 /* Change width */
