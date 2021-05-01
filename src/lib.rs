@@ -113,6 +113,29 @@ q          quit
 }
 
 
+fn read_bytes_from_user() -> Result<Vec<u8>, String> {
+    print!("> ");
+    io::stdout().flush().unwrap();
+    let input = match get_input_or_die() {
+        Ok(input) => input,
+        Err(_errcode) => {
+            return Err("Couldn't read input".to_owned());
+        }
+    };
+
+    // TODO Allow general whitespace, not just literal spaces
+    let re_bytes = Regex::new(r"^ *([0-9a-fA-F][0-9a-fA-F] *)* *$").unwrap();
+    if re_bytes.is_match(&input) {
+        let nibbles:Vec<String> = input.replace(" ", "").chars().map(|x| x.to_string()).collect();
+        Ok(nibbles.chunks(2).map(|x| x.join("")).map(|x| u8::from_str_radix(&x, 16).unwrap()).collect())
+
+    }
+    else {
+        Err(format!("Couldn't interpret '{}' as a sequence of bytes", &input))
+    }
+}
+
+
 fn bad_range(bytes: &Vec<u8>, range: (usize, usize)) -> bool {
     bytes.len() == 0 || range.1 >= bytes.len()
 }
@@ -132,7 +155,7 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_plus = Regex::new(r"^ *\+ *$").unwrap();
         let re_minus = Regex::new(r"^ *\- *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxq]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqi]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -573,6 +596,12 @@ fn print_state(state:&State) {
             string_from_radix(state.radix));
     println!("Printing a newline every {} bytes",
             hex_unless_dec_with_radix(usize::from(state.width), state.radix));
+    if state.unsaved_changes {
+        println!("Unwritten changes");
+    }
+    else {
+        println!("No unwritten changes");
+    }
 }
 
 
@@ -656,6 +685,7 @@ fn lino(state:&State) -> String {
 struct State {
     radix: u32,
     show_byte_numbers: bool,
+    unsaved_changes: bool,
 
     /* Current byte number, 0 to len -1 */
     index: usize,
@@ -672,9 +702,9 @@ struct State {
 
 impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "radix: {}|show_byte_numbers: {}|index: {}|width: {}|n_padding: '{}'|",
-                self.radix, self.show_byte_numbers, self.index, self.width,
-                self.n_padding)
+        write!(f, "radix: {}|unsaved_changes: {}|show_byte_numbers: {}|index: {}|width: {}|n_padding: '{}'|",
+                self.radix, self.unsaved_changes, self.show_byte_numbers,
+                self.index, self.width, self.n_padding)
     }
 }
 
@@ -730,6 +760,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
     let mut state = State{
         radix: 16,
         show_byte_numbers: true,
+        unsaved_changes: false,
         index: 0,
         width: NonZeroUsize::new(16).unwrap(),
         all_bytes: all_bytes,
@@ -796,6 +827,32 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     else {
                         state.index -= 1;
                         print_bytes(&state, range(&state));
+                    }
+                },
+
+                /* insert */
+                'i' => {
+                    match read_bytes_from_user() {
+                        Ok(entered_bytes) => {
+                            // TODO Find the cheapest way to do this (maybe
+                            // make state.all_bytes a better container)
+                            let mut new = Vec::with_capacity(state.all_bytes.len() + entered_bytes.len());
+                            for i in 0..state.index {
+                                new.push(state.all_bytes[i]);
+                            }
+                            // TODO Could use Vec::splice here
+                            for i in 0..entered_bytes.len() {
+                                new.push(entered_bytes[i]);
+                            }
+                            for i in state.index..state.all_bytes.len() {
+                                new.push(state.all_bytes[i]);
+                            }
+                            state.all_bytes = new;
+                            state.unsaved_changes = true;
+                        },
+                        Err(error) => {
+                            println!("? ({})", error);
+                        },
                     }
                 },
 
@@ -887,7 +944,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                 /* Catchall error */
                 _ => {
-                    println!("? (Don't understand {})", command.command);
+                    println!("? (Don't understand command '{}')", command.command);
                     continue;
                 },
             }
