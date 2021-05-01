@@ -6,6 +6,18 @@ fn main() {
         std::process::exit(1);
     }
 
-    let filename = &args[1];
-    std::process::exit(edhex::actual_runtime(filename));
+    match &args[1][..] {
+        "-v" | "--version" => {
+            if let Some(version) = option_env!("CARGO_PKG_VERSION") {
+                println!("{}", version);
+            }
+            else {
+                println!("Version unknown (not compiled with cargo)");
+            }
+            std::process::exit(1);
+        },
+        filename => {
+            std::process::exit(edhex::actual_runtime(filename));
+        }
+    }
 }
