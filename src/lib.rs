@@ -88,30 +88,29 @@ struct Command {
 
 
 fn print_help() {
-    print!("Input is interpreted as hex unless toggled to decimal with 'x'
+    print!("Input/output is hex unless toggled to decimal with 'x'
 ?          This help
 <Enter>    Print current byte(s) and move forward to next set of byte(s)
-314        Move to byte number 0x314 (or 0d314 depending on 'x') and print from
-               there
+3d4        Move to byte number 3d4 and print from there
 +          Move 1 byte forward and print from there
 -          Move 1 byte back and print from there
-+314       Move 0x314 bytes forward (or 0d314 depending on 'x') and print from
-               there
--314       Move 0x314 bytes back (or 0d314 depending on 'x') and print from
-               there
++3d4       Move 3d4 bytes forward and print from there
+-3d4       Move 3d4 bytes back and print from there
 $          Move to last byte and print it
+k          Delete (kill) byte at current index and print new line of byte(s)
+7dk        Move to byte 7d, delete that byte, and print from there.
+1d,72k     Move to byte 1d, delete bytes 1d - 72 inclusive, and print from there.
 i          Prompt you to write out bytes which will be inserted at current index
-72i        Move to byte number 0x72 (or 0d72 depending on 'x') and prompt you to
-               write out bytes which will be inserted at current index
-12,34p     Print bytes 12 - 34 inclusive (depending on 'x'), then move to
-                leftmost byte printed on the last line.
+72i        Move to byte number 72 and prompt you to enter bytes which will be
+             inserted there.
+12,3dp     Print bytes 12 - 3d inclusive, move to leftmost byte printed on the
+             last line.
 n          Toggle whether or not byte numbers are printed before bytes
-p          Print current byte(s) (depending on 'W')
+p          Print current line of byte(s) (depending on 'W')
 s          Print state of all toggles and 'W'idth
 x          Toggle interpreting inputs and displaying output as hex or decimal
 w          Actually write changes to the file on disk
-W30        Print a linebreak every 0x30 bytes (or 0d30 bytes depending on 'x')
-               [Default 0x10]
+W3d        Print a linebreak every 3d bytes [Default 0x10]
 q          quit
 ");
 }
