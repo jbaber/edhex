@@ -101,6 +101,8 @@ fn print_help() {
                there
 $          Move to last byte and print it
 i          Prompt you to write out bytes which will be inserted at current index
+72i        Move to byte number 0x72 (or 0d72 depending on 'x') and prompt you to
+               write out bytes which will be inserted at current index
 12,34p     Print bytes 12 - 34 inclusive (depending on 'x'), then move to
                 leftmost byte printed on the last line.
 n          Toggle whether or not byte numbers are printed before bytes
@@ -157,7 +159,7 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_plus = Regex::new(r"^ *\+ *$").unwrap();
         let re_minus = Regex::new(r"^ *\- *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqiw]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqwi]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -228,7 +230,7 @@ impl Command {
             }
             else {
                 Ok(Command{
-                    range: (0, 0),
+                    range: (index, index),
                     command: command,
                     args: vec![],
                 })
@@ -838,6 +840,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 'i' => {
                     match read_bytes_from_user() {
                         Ok(entered_bytes) => {
+                            state.index = command.range.1;
                             // TODO Find the cheapest way to do this (maybe
                             // make state.all_bytes a better container)
                             let mut new = Vec::with_capacity(state.all_bytes.len() + entered_bytes.len());
@@ -853,6 +856,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                             }
                             state.all_bytes = new;
                             state.unsaved_changes = true;
+                            print_bytes(&state, range(&state));
                         },
                         Err(error) => {
                             println!("? ({})", error);
