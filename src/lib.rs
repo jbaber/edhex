@@ -851,6 +851,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* + */
                     'G' => {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                            continue;
+                        }
+
                         match state.max_index() {
                             Ok(max) => {
                                 if state.index == max {
@@ -872,7 +877,10 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* - */
                     'H' => {
-                        if state.index == 0 {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                        }
+                        else if state.index == 0 {
                             println!("? (already at 0th byte");
                         }
                         else {
@@ -918,6 +926,10 @@ pub fn actual_runtime(filename: &str) -> i32 {
                     /* 'k'ill byte(s) (Can't use 'd' because that's a hex
                     * character! */
                     'k' => {
+                        if state.empty() {
+                            println!("? (Empty file");
+                            continue;
+                        }
                         skip_bad_range!(command, state.all_bytes);
                         let mut right_half = state.all_bytes.split_off(command.range.0);
                         right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
@@ -944,6 +956,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* User pressed enter */
                     '\n' => {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                            continue;
+                        };
+
                         match state.max_index() {
                             Ok(max) => {
                                 let width = usize::from(state.width);
@@ -970,6 +987,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* Print byte(s) at one place, width long */
                     'P' => {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                            continue;
+                        };
+
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
                         if let Some(last_left_col_index) = print_bytes(&state, state.range()) {
@@ -982,6 +1004,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* Print byte(s) with range */
                     'p' => {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                            continue;
+                        };
+
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
                         if let Some(last_left_col_index) = print_bytes(&state, (command.range.0, command.range.1)) {
@@ -994,6 +1021,11 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* Print byte(s) at *current* place, width long */
                     'Q' => {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                            continue;
+                        };
+
                         print_bytes(&state, state.range());
                     },
 
