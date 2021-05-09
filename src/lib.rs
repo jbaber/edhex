@@ -150,8 +150,7 @@ impl Command {
     }
 
 
-    fn from_index_and_line(index: usize, line: &str,
-            _max_index: usize, radix: u32) -> Result<Command, String> {
+    fn from_state_and_line(state:&State, line: &str) -> Result<Command, String> {
         // TODO Make these constants outside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
@@ -222,14 +221,14 @@ impl Command {
             let command = caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap();
             if command == 'p' {
                 Ok(Command{
-                    range: (index, index),
+                    range: (state.index, state.index),
                     command: 'Q',
                     args: vec![],
                 })
             }
             else {
                 Ok(Command{
-                    range: (index, index),
+                    range: (state.index, state.index),
                     command: command,
                     args: vec![],
                 })
@@ -238,7 +237,7 @@ impl Command {
 
         else if is_blank_line {
             Ok(Command{
-                range: (index, index),
+                range: (state.index, state.index),
                 command: '\n',
                 args: vec![],
             })
@@ -247,7 +246,7 @@ impl Command {
         else if is_width {
             // println!("is_width");
             let caps = caps.unwrap();
-            if let Some(width) = NonZeroUsize::new(usize::from_str_radix(caps.name("width").unwrap().as_str(), radix).unwrap()) {
+            if let Some(width) = NonZeroUsize::new(usize::from_str_radix(caps.name("width").unwrap().as_str(), state.radix).unwrap()) {
               Ok(Command{
                   range: (usize::from(width), usize::from(width)),
                   command: 'W',
@@ -260,18 +259,29 @@ impl Command {
         }
 
         else if is_range {
+            if state.empty() {
+                return Err("Empty file".to_owned());
+            }
+
+            let _max_index = match state.max_index() {
+                Ok(max) => max,
+                Err(error) => {
+                    return Err(format!("? ({})", error));
+                },
+            };
+
             // println!("is_range");
             let caps = caps.unwrap();
-            let begin = number_dot_dollar(index, _max_index,
-                    caps.name("begin").unwrap().as_str(), radix);
+            let begin = number_dot_dollar(state.index, _max_index,
+                    caps.name("begin").unwrap().as_str(), state.radix);
             if begin.is_err() {
                 // Why on Earth doesn't this work?
                 // return Err(begin.unwrap());
                 return Err("Can't understand beginning of range.".to_owned());
             }
             let begin = begin.unwrap();
-            let end = number_dot_dollar(index, _max_index,
-                    caps.name("end").unwrap().as_str(), radix);
+            let end = number_dot_dollar(state.index, _max_index,
+                    caps.name("end").unwrap().as_str(), state.radix);
             if end.is_err() {
                 // Why on Earth doesn't this work?
                 // return end;
@@ -293,10 +303,21 @@ impl Command {
         }
 
         else if is_specified_index {
+            if state.empty() {
+                return Err("Empty file".to_owned());
+            }
+
+            let _max_index = match state.max_index() {
+                Ok(max) => max,
+                Err(error) => {
+                    return Err(format!("? ({})", error));
+                },
+            };
+
             // println!("is_specified_index");
             let caps = caps.unwrap();
-            let specific_index = number_dot_dollar(index, _max_index,
-                    caps.name("index").unwrap().as_str(), radix);
+            let specific_index = number_dot_dollar(state.index, _max_index,
+                    caps.name("index").unwrap().as_str(), state.radix);
             if specific_index.is_err() {
                 // Why on Earth doesn't this work?
                 // return specific_index;
@@ -333,15 +354,15 @@ impl Command {
             // println!("is_specified_index");
             let caps = caps.unwrap();
             let as_string = caps.name("offset").unwrap().as_str();
-            let index_offset = usize::from_str_radix(as_string, radix);
+            let index_offset = usize::from_str_radix(as_string, state.radix);
             if index_offset.is_err() {
                 return Err(format!("{} is not a number", as_string));
             }
             let index_offset = index_offset.unwrap();
             let sign = caps.name("sign").unwrap().as_str();
             let begin = match sign {
-                "+" => index + index_offset,
-                "-" => index - index_offset,
+                "+" => state.index + index_offset,
+                "-" => state.index - index_offset,
                 _   => {
                     return Err(format!("Unknown sign {}", sign));
                 }
@@ -381,20 +402,6 @@ fn string_from_radix(radix: u32) -> String {
 }
 
 
-fn open_or_die(filename: &str) -> Result<std::fs::File, i32> {
-    match File::open(filename) {
-        Ok(filehandle) => {
-            Ok(filehandle)
-        }
-        Err(_) => {
-            println!("Couldn't open '{}'", filename);
-            Err(3)
-        }
-    }
-
-}
-
-
 fn get_input_or_die() -> Result<String, i32> {
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
@@ -409,8 +416,12 @@ fn get_input_or_die() -> Result<String, i32> {
 }
 
 
-fn num_bytes_or_die(open_file: &std::fs::File) -> Result<usize, i32> {
-    let metadata = open_file.metadata();
+fn num_bytes_or_die(open_file: &Option<std::fs::File>) -> Result<usize, i32> {
+    if open_file.is_none() {
+        return Ok(0);
+    }
+
+    let metadata = open_file.as_ref().unwrap().metadata();
     match metadata {
         Ok(metadata) => {
             Ok(metadata.len() as usize)
@@ -610,7 +621,11 @@ fn print_state(state:&State) {
 
 /// returns index of the byte in the 0-th column of the last row printed
 fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
-    let max = max_index(&state);
+    if state.empty() {
+        return None;
+    }
+
+    let max = state.max_index();
     if max.is_err() {
         println!("? ({:?})", max);
         return None;
@@ -720,28 +735,38 @@ impl fmt::Debug for State {
 }
 
 
-fn range(state:&State) -> (usize, usize) {
-    (state.index, state.index + usize::from(state.width) - 1)
-}
-
-
-fn max_index(state:&State) -> Result<usize, String> {
-    if state.all_bytes.len() == 0 {
-        Err("No bytes, so no max index.".to_owned())
+impl State {
+    fn empty(&self) -> bool {
+        self.all_bytes.len() == 0
     }
-    else {
-        Ok(state.all_bytes.len() - 1)
+
+    fn range(&self) -> (usize, usize) {
+        (self.index, self.index + usize::from(self.width) - 1)
+    }
+
+    fn max_index(&self) -> Result<usize, String> {
+        if self.all_bytes.len() == 0 {
+            Err("No bytes, so no max index.".to_owned())
+        }
+        else {
+            Ok(self.all_bytes.len() - 1)
+        }
     }
 }
 
 
 pub fn actual_runtime(filename: &str) -> i32 {
-    let mut file = match open_or_die(&filename) {
-        Ok(file) => {
-            file
+    let file = match File::open(filename) {
+        Ok(filehandle) => {
+            Some(filehandle)
         },
-        Err(errcode) => {
-            return errcode;
+        Err(error) => {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                None
+            }
+            else {
+                return 3;
+            }
         }
     };
 
@@ -757,16 +782,18 @@ pub fn actual_runtime(filename: &str) -> i32 {
     /* Read all bytes into memory just like real ed */
     // TODO A real hex editor needs to buffer
     let mut all_bytes = Vec::new();
-    match file.read_to_end(&mut all_bytes) {
-        Err(_) => {
-            println!("Couldn't read {}", filename);
-            return 4;
-        },
-        Ok(num_bytes_read) => {
-            if num_bytes_read != original_num_bytes {
-                println!("Only read {} of {} bytes of {}", num_bytes_read,
-                        original_num_bytes, filename);
-                return 5;
+    if file.is_some() {
+        match file.unwrap().read_to_end(&mut all_bytes) {
+            Err(_) => {
+                println!("Couldn't read {}", filename);
+                return 4;
+            },
+            Ok(num_bytes_read) => {
+                if num_bytes_read != original_num_bytes {
+                    println!("Only read {} of {} bytes of {}", num_bytes_read,
+                            original_num_bytes, filename);
+                    return 5;
+                }
             }
         }
     }
@@ -785,12 +812,12 @@ pub fn actual_runtime(filename: &str) -> i32 {
         n_padding: "      ".to_owned(),
     };
 
-    // TODO Handle new file with *no* bytes yet.
     println!("{} bytes\n? for help\n",
             hex_unless_dec(state.all_bytes.len(), state.radix));
     print_state(&state);
     println!();
-    print_bytes(&state, range(&state));
+    print_bytes(&state, state.range());
+
     loop {
         print!("*");
         io::stdout().flush().unwrap();
@@ -801,220 +828,211 @@ pub fn actual_runtime(filename: &str) -> i32 {
             }
         };
 
-        // Do this idiomatically
-        let max = match max_index(&state) {
-            Ok(max) => max,
-            Err(_) => {
-                continue
-            },
-        };
+        match Command::from_state_and_line(&state, &input) {
+            Ok(command) => {
+                // println!("{:?}", command);
+                match command.command {
 
-        if let Ok(command) = Command::from_index_and_line(state.index, &input,
-                max, state.radix) {
-            // println!("{:?}", command);
-            match command.command {
-
-                /* Error */
-                'e' => {
-                    println!("?");
-                    continue;
-                },
-
-                /* Go to */
-                'g' => {
-                    if command.bad_range(&state.all_bytes) {
-                        println!("? (bad range)");
+                    /* Error */
+                    'e' => {
+                        println!("?");
                         continue;
-                    }
-                    state.index = command.range.1;
-                    print_bytes(&state, range(&state));
-                },
+                    },
 
-                /* + */
-                'G' => {
-                    match max_index(&state) {
-                        Ok(max) => {
-                            if state.index == max {
-                                println!("? (already at last byte");
-                            }
-                            else if state.index > max {
-                                println!("? (past last byte");
-                            }
-                            else {
-                                state.index += 1;
-                                print_bytes(&state, range(&state));
-                            }
-                        },
-                        Err(error) => {
-                            println!("? ({})", error);
-                        },
-                    }
-                },
+                    /* Go to */
+                    'g' => {
+                        if command.bad_range(&state.all_bytes) {
+                            println!("? (bad range)");
+                            continue;
+                        }
+                        state.index = command.range.1;
+                        print_bytes(&state, state.range());
+                    },
 
-                /* - */
-                'H' => {
-                    if state.index == 0 {
-                        println!("? (already at 0th byte");
-                    }
-                    else {
-                        state.index -= 1;
-                        print_bytes(&state, range(&state));
-                    }
-                },
+                    /* + */
+                    'G' => {
+                        match state.max_index() {
+                            Ok(max) => {
+                                if state.index == max {
+                                    println!("? (already at last byte");
+                                }
+                                else if state.index > max {
+                                    println!("? (past last byte");
+                                }
+                                else {
+                                    state.index += 1;
+                                    print_bytes(&state, state.range());
+                                }
+                            },
+                            Err(error) => {
+                                println!("? ({})", error);
+                            },
+                        }
+                    },
 
-                /* insert */
-                'i' => {
-                    match read_bytes_from_user() {
-                        Ok(entered_bytes) => {
-                            state.index = command.range.1;
-                            // TODO Find the cheapest way to do this (maybe
-                            // make state.all_bytes a better container)
-                            // TODO Do this with split_off
-                            let mut new = Vec::with_capacity(state.all_bytes.len() + entered_bytes.len());
-                            for i in 0..state.index {
-                                new.push(state.all_bytes[i]);
+                    /* - */
+                    'H' => {
+                        if state.index == 0 {
+                            println!("? (already at 0th byte");
+                        }
+                        else {
+                            state.index -= 1;
+                            print_bytes(&state, state.range());
+                        }
+                    },
+
+                    /* insert */
+                    'i' => {
+                        match read_bytes_from_user() {
+                            Ok(entered_bytes) => {
+                                state.index = command.range.1;
+                                // TODO Find the cheapest way to do this (maybe
+                                // make state.all_bytes a better container)
+                                // TODO Do this with split_off
+                                let mut new = Vec::with_capacity(state.all_bytes.len() + entered_bytes.len());
+                                for i in 0..state.index {
+                                    new.push(state.all_bytes[i]);
+                                }
+                                // TODO Could use Vec::splice here
+                                for i in 0..entered_bytes.len() {
+                                    new.push(entered_bytes[i]);
+                                }
+                                for i in state.index..state.all_bytes.len() {
+                                    new.push(state.all_bytes[i]);
+                                }
+                                state.all_bytes = new;
+                                state.unsaved_changes = true;
+                                print_bytes(&state, state.range());
+                            },
+                            Err(error) => {
+                                println!("? ({})", error);
+                            },
+                        }
+                    },
+
+                    /* Help */
+                    '?'|'h' => {
+                        print_help();
+                    },
+
+                    /* 'k'ill byte(s) (Can't use 'd' because that's a hex
+                    * character! */
+                    'k' => {
+                        skip_bad_range!(command, state.all_bytes);
+                        let mut right_half = state.all_bytes.split_off(command.range.0);
+                        right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
+                        state.all_bytes.append(&mut right_half);
+                        state.index = command.range.0;
+                        print_bytes(&state, state.range());
+                    },
+
+                    /* Toggle showing byte number */
+                    'n' => {
+                        state.show_byte_numbers = !state.show_byte_numbers;
+                        println!("{}", state.show_byte_numbers);
+                    },
+
+                    /* Toggle hex/dec */
+                    'x' => {
+                        state.radix = if state.radix == 16 {
+                            10
+                        }
+                        else {
+                            16
+                        }
+                    },
+
+                    /* User pressed enter */
+                    '\n' => {
+                        match state.max_index() {
+                            Ok(max) => {
+                                let width = usize::from(state.width);
+                                let first_byte_to_show_index = state.index + width;
+                                let last_byte_to_show_index = min(
+                                        first_byte_to_show_index + width - 1,
+                                                max);
+                                if first_byte_to_show_index > max {
+                                    println!("? (already showing last byte at index {})",
+                                            hex_unless_dec(last_byte_to_show_index,
+                                                    state.radix));
+                                }
+                                else {
+                                    state.index = first_byte_to_show_index;
+                                    print_bytes(&state, (first_byte_to_show_index,
+                                            last_byte_to_show_index));
+                                }
+                            },
+                            Err(error) => {
+                                println!("? ({})", error);
                             }
-                            // TODO Could use Vec::splice here
-                            for i in 0..entered_bytes.len() {
-                                new.push(entered_bytes[i]);
-                            }
-                            for i in state.index..state.all_bytes.len() {
-                                new.push(state.all_bytes[i]);
-                            }
-                            state.all_bytes = new;
-                            state.unsaved_changes = true;
-                            print_bytes(&state, range(&state));
-                        },
-                        Err(error) => {
-                            println!("? ({})", error);
-                        },
-                    }
-                },
-
-                /* Help */
-                '?'|'h' => {
-                    print_help();
-                },
-
-                /* 'k'ill byte(s) (Can't use 'd' because that's a hex
-                 * character! */
-                'k' => {
-                    skip_bad_range!(command, state.all_bytes);
-                    let mut right_half = state.all_bytes.split_off(command.range.0);
-                    right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
-                    state.all_bytes.append(&mut right_half);
-                    state.index = command.range.0;
-                    print_bytes(&state, range(&state));
-                },
-
-                /* Toggle showing byte number */
-                'n' => {
-                    state.show_byte_numbers = !state.show_byte_numbers;
-                    println!("{}", state.show_byte_numbers);
-                },
-
-                /* Toggle hex/dec */
-                'x' => {
-                    state.radix = if state.radix == 16 {
-                        10
-                    }
-                    else {
-                        16
-                    }
-                },
-
-                /* User pressed enter */
-                '\n' => {
-                    match max_index(&state) {
-                        Ok(max) => {
-                            let width = usize::from(state.width);
-                            let first_byte_to_show_index = state.index + width;
-                            let last_byte_to_show_index = min(
-                                    first_byte_to_show_index + width - 1,
-                                            max);
-                            if first_byte_to_show_index > max {
-                                println!("? (already showing last byte at index {})",
-                                        hex_unless_dec(last_byte_to_show_index,
-                                                state.radix));
-                            }
-                            else {
-                                state.index = first_byte_to_show_index;
-                                print_bytes(&state, (first_byte_to_show_index,
-                                        last_byte_to_show_index));
-                            }
-                        },
-                        Err(error) => {
-                            println!("? ({})", error);
                         }
                     }
-                }
 
-                /* Print byte(s) at one place, width long */
-                'P' => {
-                    skip_bad_range!(command, state.all_bytes);
-                    state.index = command.range.0;
-                    if let Some(last_left_col_index) = print_bytes(&state, range(&state)) {
+                    /* Print byte(s) at one place, width long */
+                    'P' => {
+                        skip_bad_range!(command, state.all_bytes);
+                        state.index = command.range.0;
+                        if let Some(last_left_col_index) = print_bytes(&state, state.range()) {
+                            state.index = last_left_col_index;
+                        }
+                        else {
+                            println!("? (bad range {:?}", state.range());
+                        }
+                    },
+
+                    /* Print byte(s) with range */
+                    'p' => {
+                        skip_bad_range!(command, state.all_bytes);
+                        state.index = command.range.0;
+                        if let Some(last_left_col_index) = print_bytes(&state, (command.range.0, command.range.1)) {
                         state.index = last_left_col_index;
-                    }
-                    else {
-                        println!("? (bad range {:?}", range(&state));
-                    }
-                },
+                        }
+                        else {
+                            println!("? (bad range {:?}", command.range);
+                        }
+                    },
 
-                /* Print byte(s) with range */
-                'p' => {
-                    skip_bad_range!(command, state.all_bytes);
-                    state.index = command.range.0;
-                    if let Some(last_left_col_index) = print_bytes(&state, (command.range.0, command.range.1)) {
-                    state.index = last_left_col_index;
-                    }
-                    else {
-                        println!("? (bad range {:?}", command.range);
-                    }
-                },
+                    /* Print byte(s) at *current* place, width long */
+                    'Q' => {
+                        print_bytes(&state, state.range());
+                    },
 
-                /* Print byte(s) at *current* place, width long */
-                'Q' => {
-                    print_bytes(&state, range(&state));
-                },
+                    /* Quit */
+                    'q' => {
+                        return 0;
+                    },
 
-                /* Quit */
-                'q' => {
-                    return 0;
-                },
+                    /* Print state */
+                    's' => {
+                        print_state(&state);
+                    },
 
-                /* Print state */
-                's' => {
-                    print_state(&state);
-                },
+                    /* Write out */
+                    'w' => {
+                        let result = std::fs::write(filename, &state.all_bytes);
+                        if result.is_err() {
+                            println!("? (Couldn't write to {})", state.filename);
+                        }
+                    },
 
-                /* Write out */
-                'w' => {
-                    let result = std::fs::write(filename, &state.all_bytes);
-                    if result.is_err() {
-                        println!("? (Couldn't write to {})", state.filename);
-                    }
-                },
+                    /* Change width */
+                    'W' => {
+                        if let Some(width) = NonZeroUsize::new(command.range.0) {
+                            state.width = width;
+                        }
+                    },
 
-                /* Change width */
-                'W' => {
-                    if let Some(width) = NonZeroUsize::new(command.range.0) {
-                        state.width = width;
-                    }
-                },
-
-                /* Catchall error */
-                _ => {
-                    println!("? (Don't understand command '{}')", command.command);
-                    continue;
-                },
+                    /* Catchall error */
+                    _ => {
+                        println!("? (Don't understand command '{}')", command.command);
+                        continue;
+                    },
+                }
+            },
+            Err(error) => {
+                println!("? ({})", error);
+                continue;
             }
-        }
-
-        /* Couldn't parse command */
-        else {
-            println!("?");
-            continue;
         }
     }
 }
