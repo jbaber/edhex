@@ -1,11 +1,6 @@
+- Handle +++ and --
 - Handle things like "$-10"
-- Handle .,$ type ranges
 - Support editing and writing out
-- Separate library from binary
 - Read from STDIN
 - docs.rs documentation
 - Implement /
-- Make n respect width with output like
-
-      0x0000 dead beef
-      0x0004 feed face
