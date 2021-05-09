@@ -1,3 +1,5 @@
+- Handle empty file
+- Handle when user empties file that had bytes
 - Handle +++ and --
 - Handle things like "$-10"
 - Support editing and writing out

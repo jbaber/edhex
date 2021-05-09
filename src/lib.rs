@@ -610,8 +610,15 @@ fn print_state(state:&State) {
 
 /// returns index of the byte in the 0-th column of the last row printed
 fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
+    let max = max_index(&state);
+    if max.is_err() {
+        println!("? ({:?})", max);
+        return None;
+    }
+    let max = max.unwrap();
+
     let from = range.0;
-    let to = min(max_index(&state), range.1);
+    let to = min(max, range.1);
     if bad_range(&state.all_bytes, (from, to)) {
       println!("? (Bad range: ({}, {}))", range.0, range.1);
       return None;
@@ -718,8 +725,13 @@ fn range(state:&State) -> (usize, usize) {
 }
 
 
-fn max_index(state:&State) -> usize {
-    state.all_bytes.len() - 1
+fn max_index(state:&State) -> Result<usize, String> {
+    if state.all_bytes.len() == 0 {
+        Err("No bytes, so no max index.".to_owned())
+    }
+    else {
+        Ok(state.all_bytes.len() - 1)
+    }
 }
 
 
@@ -789,8 +801,16 @@ pub fn actual_runtime(filename: &str) -> i32 {
             }
         };
 
+        // Do this idiomatically
+        let max = match max_index(&state) {
+            Ok(max) => max,
+            Err(_) => {
+                continue
+            },
+        };
+
         if let Ok(command) = Command::from_index_and_line(state.index, &input,
-                state.all_bytes.len() - 1, state.radix) {
+                max, state.radix) {
             // println!("{:?}", command);
             match command.command {
 
@@ -812,15 +832,22 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                 /* + */
                 'G' => {
-                    if state.index == max_index(&state) {
-                        println!("? (already at last byte");
-                    }
-                    else if state.index > max_index(&state) {
-                        println!("? (past last byte");
-                    }
-                    else {
-                        state.index += 1;
-                        print_bytes(&state, range(&state));
+                    match max_index(&state) {
+                        Ok(max) => {
+                            if state.index == max {
+                                println!("? (already at last byte");
+                            }
+                            else if state.index > max {
+                                println!("? (past last byte");
+                            }
+                            else {
+                                state.index += 1;
+                                print_bytes(&state, range(&state));
+                            }
+                        },
+                        Err(error) => {
+                            println!("? ({})", error);
+                        },
                     }
                 },
 
@@ -898,20 +925,27 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                 /* User pressed enter */
                 '\n' => {
-                    let width = usize::from(state.width);
-                    let first_byte_to_show_index = state.index + width;
-                    let last_byte_to_show_index = min(
-                            first_byte_to_show_index + width - 1,
-                                    max_index(&state));
-                    if first_byte_to_show_index > max_index(&state) {
-                        println!("? (already showing last byte at index {})",
-                                hex_unless_dec(last_byte_to_show_index,
-                                        state.radix));
-                    }
-                    else {
-                        state.index = first_byte_to_show_index;
-                        print_bytes(&state, (first_byte_to_show_index,
-                                last_byte_to_show_index));
+                    match max_index(&state) {
+                        Ok(max) => {
+                            let width = usize::from(state.width);
+                            let first_byte_to_show_index = state.index + width;
+                            let last_byte_to_show_index = min(
+                                    first_byte_to_show_index + width - 1,
+                                            max);
+                            if first_byte_to_show_index > max {
+                                println!("? (already showing last byte at index {})",
+                                        hex_unless_dec(last_byte_to_show_index,
+                                                state.radix));
+                            }
+                            else {
+                                state.index = first_byte_to_show_index;
+                                print_bytes(&state, (first_byte_to_show_index,
+                                        last_byte_to_show_index));
+                            }
+                        },
+                        Err(error) => {
+                            println!("? ({})", error);
+                        }
                     }
                 }
 
