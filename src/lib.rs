@@ -158,7 +158,7 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_plus = Regex::new(r"^ *\+ *$").unwrap();
         let re_minus = Regex::new(r"^ *\- *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqwi]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -222,7 +222,7 @@ impl Command {
             let command = caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap();
             if command == 'p' {
                 Ok(Command{
-                    range: (0, 0),
+                    range: (index, index),
                     command: 'Q',
                     args: vec![],
                 })
@@ -842,6 +842,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
                             state.index = command.range.1;
                             // TODO Find the cheapest way to do this (maybe
                             // make state.all_bytes a better container)
+                            // TODO Do this with split_off
                             let mut new = Vec::with_capacity(state.all_bytes.len() + entered_bytes.len());
                             for i in 0..state.index {
                                 new.push(state.all_bytes[i]);
@@ -866,6 +867,17 @@ pub fn actual_runtime(filename: &str) -> i32 {
                 /* Help */
                 '?'|'h' => {
                     print_help();
+                },
+
+                /* 'k'ill byte(s) (Can't use 'd' because that's a hex
+                 * character! */
+                'k' => {
+                    skip_bad_range!(command, state.all_bytes);
+                    let mut right_half = state.all_bytes.split_off(command.range.0);
+                    right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
+                    state.all_bytes.append(&mut right_half);
+                    state.index = command.range.0;
+                    print_bytes(&state, range(&state));
                 },
 
                 /* Toggle showing byte number */
