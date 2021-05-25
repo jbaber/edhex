@@ -12,3 +12,4 @@ edition = "2018"
 [dependencies]
 regex = "1.4.5"
 ansi_term = "0.12.1"
+unicode-segmentation = "1.6.0"

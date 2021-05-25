@@ -8,6 +8,7 @@ use std::io::Write;
 use regex::Regex;
 use ansi_term::Color;
 use ansi_term::Color::Fixed;
+use unicode_segmentation::UnicodeSegmentation;
 
 
 macro_rules! skip_bad_range {
@@ -536,6 +537,14 @@ mod tests {
     }
 
     #[test]
+    fn test_num_graphemes() {
+        assert_eq!(num_graphemes("hey, there"), 10);
+        assert_eq!(num_graphemes("दीपक"), 3);
+        assert_eq!(num_graphemes("ﷺ"), 1);
+        assert_eq!(num_graphemes("père"), 4);
+    }
+
+    #[test]
     fn test_bytes_line() {
         let bytes = vec![];
         let _1 = NonZeroUsize::new(1).unwrap();
@@ -655,13 +664,28 @@ fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
             }
         }
         let cur_line = bytes_line(bytes, bytes_line_num, state.width)
-                .iter().map(|x| formatted_byte(*x, true)).collect::<Vec<String>>().join(" ");
-        println!("{}", cur_line);
+                .iter().map(|x| formatted_byte(*x, true))
+                .collect::<Vec<String>>().join(" ");
+        let cur_line = cur_line.trim();
+        print!("|{}|", cur_line);
+        // TODO Do this with format!
+        if state.show_chars {
+            print!("{}   {}", cur_line.len(), chars_line(bytes, bytes_line_num, state.width));
+        }
+        println!();
         left_col_byte_num = from + bytes_line_num * usize::from(state.width);
     }
     Some(left_col_byte_num)
 }
 
+
+/// .len gives the number of bytes
+/// .chars.count() gives the number of characters (which counts è as two characters.
+/// The human concept is unicode "graphemes" or "glyphs" defined to be what
+/// think they are.
+fn num_graphemes(unicode_string: &str) -> usize {
+    return unicode_string.graphemes(true).count();
+}
 
 fn number_dot_dollar(index:usize, _max_index:usize, input:&str, radix:u32)
         -> Result<usize, String> {

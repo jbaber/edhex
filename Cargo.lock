@@ -20,10 +20,11 @@ dependencies = [
 
 [[package]]
 name = "edhex"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "ansi_term",
  "regex",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -48,6 +49,12 @@ name = "regex-syntax"
 version = "0.6.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24d5f089152e60f62d28b835fbff2cd2e8dc0baf1ac13343bef92ab7eed84548"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb0d2e7be6ae3a5fa87eed5fb451aff96f2573d2694942e40543ae0bbe19c796"
 
 [[package]]
 name = "winapi"
