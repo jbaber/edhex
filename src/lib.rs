@@ -92,31 +92,88 @@ struct Command {
 
 fn print_help() {
     print!("Input/output is hex unless toggled to decimal with 'x'
-?          This help
-<Enter>    Print current byte(s) and move forward to next set of byte(s)
-3d4        Move to byte number 3d4 and print from there
-+          Move 1 byte forward and print from there
--          Move 1 byte back and print from there
-+3d4       Move 3d4 bytes forward and print from there
--3d4       Move 3d4 bytes back and print from there
-$          Move to last byte and print it
-k          Delete (kill) byte at current index and print new line of byte(s)
-7dk        Move to byte 7d, delete that byte, and print from there.
-1d,72k     Move to byte 1d, delete bytes 1d - 72 inclusive, and print from there.
-i          Prompt you to write out bytes which will be inserted at current index
-72i        Move to byte number 72 and prompt you to enter bytes which will be
-             inserted there.
-12,3dp     Print bytes 12 - 3d inclusive, move to leftmost byte printed on the
-             last line.
-m          Toggle whether or not characters are printed after bytes
-n          Toggle whether or not byte numbers are printed before bytes
-p          Print current line of byte(s) (depending on 'W')
-s          Print state of all toggles and 'W'idth
-x          Toggle interpreting inputs and displaying output as hex or decimal
-w          Actually write changes to the file on disk
-W3d        Print a linebreak every 3d bytes [Default 0x10]
-q          quit
+?            This help
+<Enter>      Print current byte(s) and move forward to next set of byte(s)
+3d4          Move to byte number 3d4 and print from there
++            Move 1 byte forward and print from there
++++          Move 3 bytes forward and print from there
+-            Move 1 byte back and print from there
++3d4         Move 3d4 bytes forward and print from there
+-3d4         Move 3d4 bytes back and print from there
+$            Move to last byte and print it
+/deadbeef    If the bytes de ad be ef exist after the current index, move there
+               and print.
+k            Delete (kill) byte at current index and print new line of byte(s)
+7dk          Move to byte 7d, delete that byte, and print from there.
+1d,72k       Move to byte 1d, delete bytes 1d - 72 inclusive, and print from there.
+/deadbeef/k  If the bytes de ad be ef exist after the current index, move there,
+               delete those bytes, and print.
+i            Prompt you to write out bytes which will be inserted at current index
+72i          Move to byte number 72 and prompt you to enter bytes which will be
+               inserted there.
+/deadbeef/i  If the bytes de ad be ef exist after the current index, move there
+               and prompt you to enter bytes which will be inserted there.
+12,3dp       Print bytes 12 - 3d inclusive, move to leftmost byte printed on the
+               last line.
+m            Toggle whether or not characters are printed after bytes
+n            Toggle whether or not byte numbers are printed before bytes
+p            Print current line of byte(s) (depending on 'W')
+s            Print state of all toggles and 'W'idth
+x            Toggle interpreting inputs and displaying output as hex or decimal
+w            Actually write changes to the file on disk
+W3d          Print a linebreak every 3d bytes [Default 0x10]
+q            quit
 ");
+}
+
+
+fn string_from_bytes(bytes:&[u8]) -> String {
+    let mut to_return = "".to_owned();
+    for &byte in bytes {
+        to_return += &padded_byte(byte);
+    }
+    return to_return;
+}
+
+
+fn index_of_bytes(needle:&[u8], haystack:&[u8]) -> Option<usize> {
+    let needle_num_bytes = if needle.len() == 0 {
+        return None;
+    }
+    else {
+        needle.len()
+    };
+
+    for index in 0..haystack.len() {
+        let range = (index, index + needle_num_bytes - 1);
+
+        if bad_range(&haystack.to_vec(), range) {
+            return None;
+        }
+
+
+        if &haystack[range.0..=range.1] == needle {
+            return Some(index);
+        }
+        else {
+
+        }
+    }
+
+    None
+}
+
+
+fn bytes_from_string(nibbles_s:&str) -> Result<Vec<u8>, String> {
+    // TODO Allow general whitespace, not just literal spaces
+    let re_bytes = Regex::new(r"^ *([0-9a-fA-F][0-9a-fA-F] *)* *$").unwrap();
+    if re_bytes.is_match(&nibbles_s) {
+        let nibbles_v:Vec<String> = nibbles_s.replace(" ", "").chars().map(|x| x.to_string()).collect();
+        Ok(nibbles_v.chunks(2).map(|x| x.join("")).map(|x| u8::from_str_radix(&x, 16).unwrap()).collect())
+    }
+    else {
+        Err(format!("Couldn't interpret '{}' as a sequence of bytes", &nibbles_s))
+    }
 }
 
 
@@ -130,21 +187,37 @@ fn read_bytes_from_user() -> Result<Vec<u8>, String> {
         }
     };
 
-    // TODO Allow general whitespace, not just literal spaces
-    let re_bytes = Regex::new(r"^ *([0-9a-fA-F][0-9a-fA-F] *)* *$").unwrap();
-    if re_bytes.is_match(&input) {
-        let nibbles:Vec<String> = input.replace(" ", "").chars().map(|x| x.to_string()).collect();
-        Ok(nibbles.chunks(2).map(|x| x.join("")).map(|x| u8::from_str_radix(&x, 16).unwrap()).collect())
-
-    }
-    else {
-        Err(format!("Couldn't interpret '{}' as a sequence of bytes", &input))
-    }
+    bytes_from_string(&input)
 }
 
 
+// TODO: This should take a usize..=usize range object
 fn bad_range(bytes: &Vec<u8>, range: (usize, usize)) -> bool {
     bytes.len() == 0 || range.1 >= bytes.len()
+}
+
+
+/// Returns new index
+fn move_to(state:&mut State, index:usize) -> Result<usize, String> {
+    if state.empty() {
+        Err("Empty file".to_owned())
+    }
+    else {
+        let _max_index = match state.max_index() {
+            Ok(max) => max,
+            Err(error) => {
+                return Err(error);
+            },
+        };
+
+        if index > _max_index {
+            Err(format!("{} > {} = maximum index", index, _max_index))
+        }
+        else {
+            state.index = index;
+            Ok(index)
+        }
+    }
 }
 
 
@@ -161,6 +234,9 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_pluses = Regex::new(r"^ *(?P<pluses>\++) *$").unwrap();
         let re_minuses = Regex::new(r"^ *(?P<minuses>\-+) *$").unwrap();
+        let re_search = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+) *$").unwrap();
+        let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
+        let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
         let re_single_char_command = Regex::new(r"^ *(?P<command>[?mnpsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
@@ -173,6 +249,9 @@ impl Command {
         let is_pluses              = re_pluses.is_match(line);
         let is_minuses             = re_minuses.is_match(line);
         let is_range               = re_range.is_match(line);
+        let is_search              = re_search.is_match(line);
+        let is_search_kill         = re_search_kill.is_match(line);
+        let is_search_insert       = re_search_insert.is_match(line);
         let is_specified_index     = re_specified_index.is_match(line);
         let is_offset_index        = re_offset_index.is_match(line);
         let is_width               = re_width.is_match(line);
@@ -182,6 +261,15 @@ impl Command {
         }
         else if is_single_char_command {
             re_single_char_command
+        }
+        else if is_search {
+            re_search
+        }
+        else if is_search_insert {
+            re_search_insert
+        }
+        else if is_search_kill {
+            re_search_kill
         }
         else if is_pluses {
             re_pluses
@@ -215,6 +303,81 @@ impl Command {
                 args: vec![],
             })
         }
+
+        else if is_search_insert {
+            match bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
+                Ok(needle) => {
+                    let needle_num_bytes = if needle.len() == 0 {
+                        return Err("Searching for empty string".to_owned());
+                    }
+                    else {
+                        needle.len()
+                    };
+
+                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
+                        Ok(Command{
+                            range: (state.index + offset, state.index + offset),
+                            command: 'i',
+                            args: vec![],
+                        })
+                    }
+                    else {
+                        Err(format!("{} not found", string_from_bytes(&needle)))
+                    }
+                },
+                Err(error) => {
+                    Err(error)
+                }
+            }
+        }
+
+        else if is_search_kill {
+            match bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
+                Ok(needle) => {
+                    let needle_num_bytes = if needle.len() == 0 {
+                        return Err("Searching for empty string".to_owned());
+                    }
+                    else {
+                        needle.len()
+                    };
+
+                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
+                        Ok(Command{
+                            range: (state.index + offset, state.index + offset + needle_num_bytes - 1),
+                            command: 'k',
+                            args: vec![],
+                        })
+                    }
+                    else {
+                        Err(format!("{} not found", string_from_bytes(&needle)))
+                    }
+                },
+                Err(error) => {
+                    Err(error)
+                }
+            }
+        }
+
+        else if is_search {
+            match bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
+                Ok(needle) => {
+                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
+                        Ok(Command{
+                            range: (state.index + offset, state.index + offset),
+                            command: 'g',
+                            args: vec![],
+                        })
+                    }
+                    else {
+                        Err(format!("{} not found", string_from_bytes(&needle)))
+                    }
+                },
+                Err(error) => {
+                    Err(error)
+                }
+            }
+        }
+
         else if is_minuses {
             let num_minuses = num_graphemes(caps.unwrap().name("minuses").unwrap().as_str());
             Ok(Command{
@@ -223,6 +386,7 @@ impl Command {
                 args: vec![],
             })
         }
+
         else if is_single_char_command {
             let command = caps.unwrap().name("command").unwrap().as_str().chars().next().unwrap();
             if command == 'p' {
@@ -511,6 +675,17 @@ mod tests {
         assert_eq!(padded_byte(2), "02");
         assert_eq!(padded_byte(10), "0a");
     }
+
+    #[test]
+    fn test_index_of_bytes() {
+        let haystack = vec![0xde, 0xad, 0xbe, 0xef];
+        assert_eq!(index_of_bytes(&vec![], &haystack), None);
+        assert_eq!(index_of_bytes(&vec![0xad, 0xbe], &haystack), Some(1));
+        assert_eq!(index_of_bytes(&vec![0xad, 0xbe, 0xef], &haystack), Some(1));
+        assert_eq!(index_of_bytes(&vec![0xad, 0xbe, 0xef, 0xef], &haystack), None);
+        assert_eq!(index_of_bytes(&vec![0xde,], &haystack), Some(0));
+    }
+
 
     #[test]
     fn test_max_bytes_line() {
@@ -952,12 +1127,14 @@ pub fn actual_runtime(filename: &str) -> i32 {
 
                     /* Go to */
                     'g' => {
-                        if command.bad_range(&state.all_bytes) {
-                            println!("? (bad range)");
-                            continue;
+                        match move_to(&mut state, command.range.0) {
+                            Ok(_) => {
+                                print_bytes(&state, state.range());
+                            },
+                            Err(error) => {
+                                println!("? ({})", error);
+                            }
                         }
-                        state.index = command.range.1;
-                        print_bytes(&state, state.range());
                     },
 
                     /* +'s */

@@ -1,5 +1,4 @@
-- Handle +++ and --
 - Handle things like "$-10"
 - Read from STDIN
 - docs.rs documentation
-- Implement /
+- Implement backwards search with ?
