@@ -159,8 +159,8 @@ impl Command {
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
         let re_blank_line = Regex::new(r"^ *$").unwrap();
-        let re_plus = Regex::new(r"^ *\+ *$").unwrap();
-        let re_minus = Regex::new(r"^ *\- *$").unwrap();
+        let re_pluses = Regex::new(r"^ *(?P<pluses>\++) *$").unwrap();
+        let re_minuses = Regex::new(r"^ *(?P<minuses>\-+) *$").unwrap();
         let re_single_char_command = Regex::new(r"^ *(?P<command>[?mnpsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
@@ -170,8 +170,8 @@ impl Command {
 
         let is_blank_line          = re_blank_line.is_match(line);
         let is_single_char_command = re_single_char_command.is_match(line);
-        let is_plus                = re_plus.is_match(line);
-        let is_minus               = re_minus.is_match(line);
+        let is_pluses              = re_pluses.is_match(line);
+        let is_minuses             = re_minuses.is_match(line);
         let is_range               = re_range.is_match(line);
         let is_specified_index     = re_specified_index.is_match(line);
         let is_offset_index        = re_offset_index.is_match(line);
@@ -183,11 +183,11 @@ impl Command {
         else if is_single_char_command {
             re_single_char_command
         }
-        else if is_plus {
-            re_plus
+        else if is_pluses {
+            re_pluses
         }
-        else if is_minus {
-            re_minus
+        else if is_minuses {
+            re_minuses
         }
         else if is_range {
             re_range
@@ -207,16 +207,18 @@ impl Command {
 
         let caps = re.captures(line);
 
-        if is_plus {
+        if is_pluses {
+            let num_pluses = num_graphemes(caps.unwrap().name("pluses").unwrap().as_str());
             Ok(Command{
-                range: (0, 0),
+                range: (num_pluses, num_pluses),
                 command: 'G',
                 args: vec![],
             })
         }
-        else if is_minus {
+        else if is_minuses {
+            let num_minuses = num_graphemes(caps.unwrap().name("minuses").unwrap().as_str());
             Ok(Command{
-                range: (0, 0),
+                range: (num_minuses, num_minuses),
                 command: 'H',
                 args: vec![],
             })
@@ -817,6 +819,51 @@ impl State {
     }
 }
 
+/// Returns new index number
+fn minuses(state:&mut State, num_minuses:usize) -> Result<usize, String> {
+    if state.empty() {
+        Err("Empty file".to_owned())
+    }
+    else if state.index == 0 {
+        Err("already at 0th byte".to_owned())
+    }
+    else if state.index < num_minuses {
+        Err(format!("Going back {} bytes would take you beyond the 0th byte", num_minuses))
+    }
+    else {
+        state.index -= num_minuses;
+        print_bytes(&state, state.range());
+        Ok(state.index)
+    }
+}
+
+/// Returns new index number
+fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
+    if state.empty() {
+        Err("Empty file".to_owned())
+    }
+    else {
+        match state.max_index() {
+            Ok(max) => {
+                if state.index == max {
+                    Err("already at last byte".to_owned())
+                }
+                else if state.index + num_pluses > max {
+                    Err(format!("Moving {} bytes would put you past last byte", num_pluses))
+                }
+                else {
+                    state.index += num_pluses;
+                    print_bytes(&state, state.range());
+                    Ok(state.index)
+                }
+            },
+            Err(error) => {
+                Err(error)
+            },
+        }
+    }
+}
+
 
 pub fn actual_runtime(filename: &str) -> i32 {
     let file = match File::open(filename) {
@@ -913,43 +960,27 @@ pub fn actual_runtime(filename: &str) -> i32 {
                         print_bytes(&state, state.range());
                     },
 
-                    /* + */
+                    /* +'s */
                     'G' => {
-                        if state.empty() {
-                            println!("? (Empty file)");
-                            continue;
-                        }
-
-                        match state.max_index() {
-                            Ok(max) => {
-                                if state.index == max {
-                                    println!("? (already at last byte");
-                                }
-                                else if state.index > max {
-                                    println!("? (past last byte");
-                                }
-                                else {
-                                    state.index += 1;
-                                    print_bytes(&state, state.range());
-                                }
-                            },
+                        match pluses(&mut state, command.range.0) {
                             Err(error) => {
                                 println!("? ({})", error);
                             },
+                            Ok(_) => {
+                                continue;
+                            }
                         }
                     },
 
-                    /* - */
+                    /* -'s */
                     'H' => {
-                        if state.empty() {
-                            println!("? (Empty file)");
-                        }
-                        else if state.index == 0 {
-                            println!("? (already at 0th byte");
-                        }
-                        else {
-                            state.index -= 1;
-                            print_bytes(&state, state.range());
+                        match minuses(&mut state, command.range.0) {
+                            Err(error) => {
+                                println!("? ({})", error);
+                            },
+                            Ok(_) => {
+                                continue;
+                            }
                         }
                     },
 
