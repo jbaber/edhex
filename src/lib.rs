@@ -70,7 +70,9 @@ impl Byte {
         use crate::ByteCategory::*;
 
         match self.category() {
-            Null => '0',
+
+            /* hexyl uses 0 here, depending on color to distinguish */
+            Null => '•',
             AsciiPrintable => self.0 as char,
             AsciiWhitespace if self.0 == 0x20 => ' ',
             AsciiWhitespace => '_',
@@ -106,6 +108,7 @@ i          Prompt you to write out bytes which will be inserted at current index
              inserted there.
 12,3dp     Print bytes 12 - 3d inclusive, move to leftmost byte printed on the
              last line.
+m          Toggle whether or not characters are printed after bytes
 n          Toggle whether or not byte numbers are printed before bytes
 p          Print current line of byte(s) (depending on 'W')
 s          Print state of all toggles and 'W'idth
@@ -158,7 +161,7 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_plus = Regex::new(r"^ *\+ *$").unwrap();
         let re_minus = Regex::new(r"^ *\- *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?npsxqwik]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?mnpsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -445,6 +448,16 @@ fn formatted_byte(byte:u8, color:bool) -> String {
 }
 
 
+fn chared_byte(byte:u8, color:bool) -> String {
+    if color {
+        Byte(byte).color().paint(String::from(Byte(byte).as_char())).to_string()
+    }
+    else {
+        Byte(byte).as_char().to_string()
+    }
+}
+
+
 fn padded_byte(byte:u8) -> String {
     format!("{:02x}", byte)
 }
@@ -460,17 +473,31 @@ fn max_bytes_line(bytes:&[u8], width:NonZeroUsize) -> usize {
 }
 
 
-fn bytes_line(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> &[u8] {
+fn bytes_line_range(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> std::ops::Range<usize> {
     let width = usize::from(width);
     if line_number * width < bytes.len() {
         let end_index = min(bytes.len(), line_number * width + width);
-        &bytes[line_number * width..end_index]
+        line_number * width..end_index
     }
-
     else {
-        &[]
+        0..0
     }
 }
+
+
+fn bytes_line(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> &[u8] {
+    &bytes[bytes_line_range(bytes, line_number, width)]
+}
+
+
+fn chars_line(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> String {
+    let mut to_return:String = "".to_owned();
+    for index in bytes_line_range(bytes, line_number, width) {
+        to_return += &String::from(chared_byte(bytes[index], true));
+    }
+    to_return
+}
+
 
 
 #[cfg(test)]
@@ -615,6 +642,9 @@ fn print_state(state:&State) {
         println!("Printing byte numbers in {}",
             string_from_radix(state.radix));
     };
+    if state.show_chars {
+        println!("Printing char representations after bytes");
+    };
     println!("Interpreting input numbers as {}",
             string_from_radix(state.radix));
     println!("Printing a newline every {} bytes",
@@ -663,14 +693,21 @@ fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
                 print!("{:>5x}{}", left_col_byte_num, state.n_padding);
             }
         }
-        let cur_line = bytes_line(bytes, bytes_line_num, state.width)
-                .iter().map(|x| formatted_byte(*x, true))
+        let cur_line = bytes_line(bytes, bytes_line_num, state.width);
+        let with_color = cur_line.iter().map(|x| formatted_byte(*x, true))
                 .collect::<Vec<String>>().join(" ");
-        let cur_line = cur_line.trim();
-        print!("|{}|", cur_line);
-        // TODO Do this with format!
+        let sans_color = cur_line.iter().map(|x| formatted_byte(*x, false))
+                .collect::<Vec<String>>().join(" ");
+        print!("|{}", with_color);
+        let expected_length = usize::from(state.width) * 3 - 1;
+        for _ in num_graphemes(&sans_color)..expected_length {
+            print!(" ");
+        }
+        print!("|");
+        // TODO Do this padding stuff format!  Unclear why previous attempts
+        // have failed.
         if state.show_chars {
-            print!("{}   {}", cur_line.len(), chars_line(bytes, bytes_line_num, state.width));
+            print!("   {}", chars_line(bytes, bytes_line_num, state.width));
         }
         println!();
         left_col_byte_num = from + bytes_line_num * usize::from(state.width);
@@ -734,6 +771,7 @@ fn lino(state:&State) -> String {
 struct State {
     radix: u32,
     show_byte_numbers: bool,
+    show_chars: bool,
     unsaved_changes: bool,
     filename: String,
 
@@ -752,9 +790,10 @@ struct State {
 
 impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "radix: {}|unsaved_changes: {}|show_byte_numbers: {}|index: {}|width: {}|n_padding: '{}'|filename: {}|",
+        write!(f, "radix: {}|unsaved_changes: {}|show_byte_numbers: {}|show_chars: {}|index: {}|width: {}|n_padding: '{}'|filename: {}|",
                 self.radix, self.unsaved_changes, self.show_byte_numbers,
-                self.index, self.width, self.n_padding, self.filename)
+                self.show_chars, self.index, self.width, self.n_padding,
+                self.filename)
     }
 }
 
@@ -828,6 +867,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
         radix: 16,
         filename: filename.to_owned(),
         show_byte_numbers: true,
+        show_chars: true,
         unsaved_changes: false,
         index: 0,
         width: NonZeroUsize::new(16).unwrap(),
@@ -960,6 +1000,12 @@ pub fn actual_runtime(filename: &str) -> i32 {
                         state.all_bytes.append(&mut right_half);
                         state.index = command.range.0;
                         print_bytes(&state, state.range());
+                    },
+
+                    /* Toggle showing char representations of bytes */
+                    'm' => {
+                        state.show_chars = !state.show_chars;
+                        println!("{}", state.show_chars);
                     },
 
                     /* Toggle showing byte number */
