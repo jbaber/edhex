@@ -307,13 +307,6 @@ impl Command {
         else if is_search_insert {
             match bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
                 Ok(needle) => {
-                    let needle_num_bytes = if needle.len() == 0 {
-                        return Err("Searching for empty string".to_owned());
-                    }
-                    else {
-                        needle.len()
-                    };
-
                     if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
                         Ok(Command{
                             range: (state.index + offset, state.index + offset),
