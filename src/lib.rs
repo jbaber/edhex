@@ -569,7 +569,14 @@ fn get_input_or_die() -> Result<String, i32> {
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(_num_bytes) => {
-            Ok(input.trim().to_string())
+
+            /* EOF Return error of 0 to indicate time for a clean exit.  */
+            if _num_bytes == 0 {
+                Err(0)
+            }
+            else {
+                Ok(input.trim().to_string())
+            }
         }
         Err(_) => {
             println!("Unable to read input");

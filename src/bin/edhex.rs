@@ -1,11 +1,13 @@
 fn print_help(name:&str) {
     println!("Usage: {} [options] <filename>
 
+{} will read interactively from the user, or read commands from STDIN
+
 Options:
     -h, --help    Print this help
     -v, --version Print version (if compiled with cargo)
-    <filename>    Name of file to be edited (- for STDIN)
-", name);
+    <filename>    Name of file to be edited
+", name, name);
 }
 
 
