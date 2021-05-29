@@ -1,3 +1,4 @@
 - Handle things like "$-10"
 - docs.rs documentation
 - Implement backwards search with ?
+- Add color toggling

@@ -864,10 +864,10 @@ fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
         }
         if state.show_byte_numbers {
             if state.radix == 10 {
-                print!("{:>5}{}", left_col_byte_num, state.n_padding);
+                print!("{:>5}{}|", left_col_byte_num, state.n_padding);
             }
             else {
-                print!("{:>5x}{}", left_col_byte_num, state.n_padding);
+                print!("{:>5x}{}|", left_col_byte_num, state.n_padding);
             }
         }
         let cur_line = bytes_line(bytes, bytes_line_num, state.width);
@@ -875,16 +875,15 @@ fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
                 .collect::<Vec<String>>().join(" ");
         let sans_color = cur_line.iter().map(|x| formatted_byte(*x, false))
                 .collect::<Vec<String>>().join(" ");
-        print!("|{}", with_color);
+        print!("{}", with_color);
         let expected_length = usize::from(state.width) * 3 - 1;
         for _ in num_graphemes(&sans_color)..expected_length {
             print!(" ");
         }
-        print!("|");
         // TODO Do this padding stuff format!  Unclear why previous attempts
         // have failed.
         if state.show_chars {
-            print!("   {}", chars_line(bytes, bytes_line_num, state.width));
+            print!("|   {}", chars_line(bytes, bytes_line_num, state.width));
         }
         println!();
         left_col_byte_num = from + bytes_line_num * usize::from(state.width);
