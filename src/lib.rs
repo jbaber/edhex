@@ -117,6 +117,7 @@ i            Prompt you to write out bytes which will be inserted at current ind
                last line.
 m            Toggle whether or not characters are printed after bytes
 n            Toggle whether or not byte numbers are printed before bytes
+o            Toggle using color
 p            Print current line of byte(s) (depending on 'W')
 s            Print state of all toggles and 'W'idth
 x            Toggle interpreting inputs and displaying output as hex or decimal
@@ -237,7 +238,7 @@ impl Command {
         let re_search = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?mnpsxqwik]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[?mnopsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -656,10 +657,10 @@ fn bytes_line(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> &[u8] {
 }
 
 
-fn chars_line(bytes:&[u8], line_number:usize, width:NonZeroUsize) -> String {
+fn chars_line(bytes:&[u8], line_number:usize, width:NonZeroUsize, color:bool) -> String {
     let mut to_return:String = "".to_owned();
     for index in bytes_line_range(bytes, line_number, width) {
-        to_return += &String::from(chared_byte(bytes[index], true));
+        to_return += &String::from(chared_byte(bytes[index], color));
     }
     to_return
 }
@@ -875,7 +876,12 @@ fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
                 .collect::<Vec<String>>().join(" ");
         let sans_color = cur_line.iter().map(|x| formatted_byte(*x, false))
                 .collect::<Vec<String>>().join(" ");
-        print!("{}", with_color);
+        if state.color {
+            print!("{}", with_color);
+        }
+        else {
+            print!("{}", sans_color);
+        }
         let expected_length = usize::from(state.width) * 3 - 1;
         for _ in num_graphemes(&sans_color)..expected_length {
             print!(" ");
@@ -883,7 +889,8 @@ fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
         // TODO Do this padding stuff format!  Unclear why previous attempts
         // have failed.
         if state.show_chars {
-            print!("|   {}", chars_line(bytes, bytes_line_num, state.width));
+            print!("|   {}", chars_line(bytes, bytes_line_num, state.width,
+                state.color));
         }
         println!();
         left_col_byte_num = from + bytes_line_num * usize::from(state.width);
@@ -952,6 +959,7 @@ struct State {
     filename: String,
 
     show_prompt: bool,
+    color: bool,
 
     /* Current byte number, 0 to len -1 */
     index: usize,
@@ -1041,7 +1049,7 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
 }
 
 
-pub fn actual_runtime(filename:&str, quiet:bool) -> i32 {
+pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
     let file = match File::open(filename) {
         Ok(filehandle) => {
             Some(filehandle)
@@ -1091,6 +1099,7 @@ pub fn actual_runtime(filename:&str, quiet:bool) -> i32 {
         filename: filename.to_owned(),
         show_byte_numbers: true,
         show_prompt: !quiet,
+        color: color,
         show_chars: true,
         unsaved_changes: false,
         index: 0,
@@ -1219,14 +1228,27 @@ pub fn actual_runtime(filename:&str, quiet:bool) -> i32 {
                     /* Toggle showing char representations of bytes */
                     'm' => {
                         state.show_chars = !state.show_chars;
-                        println!("{}", state.show_chars);
+                        if !quiet {
+                            println!("{}", state.show_chars);
+                        }
                     },
 
                     /* Toggle showing byte number */
                     'n' => {
                         state.show_byte_numbers = !state.show_byte_numbers;
-                        println!("{}", state.show_byte_numbers);
+                        if !quiet {
+                            println!("{}", state.show_byte_numbers);
+                        }
                     },
+
+                    /* Toggle color */
+                    'o' => {
+                        state.color = !state.color;
+                        if !quiet {
+                            println!("{}", state.color);
+                        }
+                    },
+
 
                     /* Toggle hex/dec */
                     'x' => {
