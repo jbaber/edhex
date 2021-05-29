@@ -212,7 +212,7 @@ fn move_to(state:&mut State, index:usize) -> Result<usize, String> {
         };
 
         if index > _max_index {
-            Err(format!("{} > {} = maximum index", index, _max_index))
+            Err(format!("{} > {} = maximum index", hex_unless_dec_with_radix(index, state.radix), hex_unless_dec_with_radix(_max_index, state.radix)))
         }
         else {
             state.index = index;
