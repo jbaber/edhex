@@ -952,6 +952,8 @@ struct State {
     unsaved_changes: bool,
     filename: String,
 
+    show_prompt: bool,
+
     /* Current byte number, 0 to len -1 */
     index: usize,
 
@@ -1040,7 +1042,7 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
 }
 
 
-pub fn actual_runtime(filename: &str) -> i32 {
+pub fn actual_runtime(filename:&str, quiet:bool) -> i32 {
     let file = match File::open(filename) {
         Ok(filehandle) => {
             Some(filehandle)
@@ -1089,6 +1091,7 @@ pub fn actual_runtime(filename: &str) -> i32 {
         radix: 16,
         filename: filename.to_owned(),
         show_byte_numbers: true,
+        show_prompt: !quiet,
         show_chars: true,
         unsaved_changes: false,
         index: 0,
@@ -1098,14 +1101,18 @@ pub fn actual_runtime(filename: &str) -> i32 {
         n_padding: "      ".to_owned(),
     };
 
-    println!("{} bytes\n? for help\n",
-            hex_unless_dec(state.all_bytes.len(), state.radix));
-    print_state(&state);
-    println!();
-    print_bytes(&state, state.range());
+    if !quiet {
+        println!("{} bytes\n? for help\n",
+                hex_unless_dec(state.all_bytes.len(), state.radix));
+        print_state(&state);
+        println!();
+        print_bytes(&state, state.range());
+    }
 
     loop {
-        print!("*");
+        if state.show_prompt {
+            print!("*");
+        }
         io::stdout().flush().unwrap();
         let input = match get_input_or_die() {
             Ok(input) => input,
