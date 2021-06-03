@@ -92,7 +92,7 @@ struct Command {
 
 fn print_help() {
     print!("Input/output is hex unless toggled to decimal with 'x'
-?            This help
+h            This help
 <Enter>      Print current byte(s) and move forward to next set of byte(s)
 3d4          Move to byte number 3d4 and print from there
 +            Move 1 byte forward and print from there
@@ -102,6 +102,8 @@ fn print_help() {
 -3d4         Move 3d4 bytes back and print from there
 $            Move to last byte and print it
 /deadbeef    If the bytes de ad be ef exist after the current index, move there
+               and print.
+?deadbeef    If the bytes de ad be ef exist before the current index, move there
                and print.
 k            Delete (kill) byte at current index and print new line of byte(s)
 7dk          Move to byte 7d, delete that byte, and print from there.
@@ -137,7 +139,7 @@ fn string_from_bytes(bytes:&[u8]) -> String {
 }
 
 
-fn index_of_bytes(needle:&[u8], haystack:&[u8]) -> Option<usize> {
+fn index_of_bytes(needle:&[u8], haystack:&[u8], forward:bool) -> Option<usize> {
     let needle_num_bytes = if needle.len() == 0 {
         return None;
     }
@@ -145,19 +147,39 @@ fn index_of_bytes(needle:&[u8], haystack:&[u8]) -> Option<usize> {
         needle.len()
     };
 
-    for index in 0..haystack.len() {
-        let range = (index, index + needle_num_bytes - 1);
+    if forward {
+        for index in 0..haystack.len() {
+            let range = (index, index + needle_num_bytes - 1);
 
-        if bad_range(&haystack.to_vec(), range) {
-            return None;
+            if bad_range(&haystack.to_vec(), range) {
+                return None;
+            }
+
+            if &haystack[range.0..=range.1] == needle {
+                return Some(index);
+            }
         }
-
-
-        if &haystack[range.0..=range.1] == needle {
-            return Some(index);
+    }
+    else {
+        let max_index = if needle_num_bytes <= haystack.len() {
+            haystack.len() - needle_num_bytes
         }
         else {
+            0
+        };
 
+        for index in (0..=max_index).rev() {
+            let range = (index, index + needle_num_bytes - 1);
+
+            if bad_range(&haystack.to_vec(), range) {
+                return None;
+            }
+
+
+            let maybe = &haystack[range.0..=range.1];
+            if maybe == needle {
+                return Some(index);
+            }
         }
     }
 
@@ -235,10 +257,10 @@ impl Command {
         let re_blank_line = Regex::new(r"^ *$").unwrap();
         let re_pluses = Regex::new(r"^ *(?P<pluses>\++) *$").unwrap();
         let re_minuses = Regex::new(r"^ *(?P<minuses>\-+) *$").unwrap();
-        let re_search = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+) *$").unwrap();
+        let re_search = Regex::new(r"^ *(?P<direction>[/?]) *(?P<bytes>[0-9a-fA-F]+) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[?mnopsxqwik]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[mnopsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -308,7 +330,7 @@ impl Command {
         else if is_search_insert {
             match bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
                 Ok(needle) => {
-                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
+                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..], true) {
                         Ok(Command{
                             range: (state.index + offset, state.index + offset),
                             command: 'i',
@@ -335,7 +357,7 @@ impl Command {
                         needle.len()
                     };
 
-                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
+                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..], true) {
                         Ok(Command{
                             range: (state.index + offset, state.index + offset + needle_num_bytes - 1),
                             command: 'k',
@@ -353,14 +375,31 @@ impl Command {
         }
 
         else if is_search {
-            match bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
+            let caps = caps.unwrap();
+            let forward = caps.name("direction").unwrap().as_str() == "/";
+            match bytes_from_string(caps.name("bytes").unwrap().as_str()) {
                 Ok(needle) => {
-                    if let Some(offset) = index_of_bytes(&needle, &state.all_bytes[state.index..]) {
-                        Ok(Command{
-                            range: (state.index + offset, state.index + offset),
-                            command: 'g',
-                            args: vec![],
-                        })
+                    let haystack = if forward {
+                        &state.all_bytes[state.index..]
+                    }
+                    else {
+                        &state.all_bytes[..state.index]
+                    };
+                    if let Some(offset) = index_of_bytes(&needle, haystack, forward) {
+                        if forward {
+                            Ok(Command{
+                                range: (state.index + offset, state.index + offset),
+                                command: 'g',
+                                args: vec![],
+                            })
+                        }
+                        else {
+                            Ok(Command{
+                                range: (offset, offset),
+                                command: 'g',
+                                args: vec![],
+                            })
+                        }
                     }
                     else {
                         Err(format!("{} not found", string_from_bytes(&needle)))
@@ -680,11 +719,11 @@ mod tests {
     #[test]
     fn test_index_of_bytes() {
         let haystack = vec![0xde, 0xad, 0xbe, 0xef];
-        assert_eq!(index_of_bytes(&vec![], &haystack), None);
-        assert_eq!(index_of_bytes(&vec![0xad, 0xbe], &haystack), Some(1));
-        assert_eq!(index_of_bytes(&vec![0xad, 0xbe, 0xef], &haystack), Some(1));
-        assert_eq!(index_of_bytes(&vec![0xad, 0xbe, 0xef, 0xef], &haystack), None);
-        assert_eq!(index_of_bytes(&vec![0xde,], &haystack), Some(0));
+        assert_eq!(index_of_bytes(&vec![], &haystack), None, true);
+        assert_eq!(index_of_bytes(&vec![0xad, 0xbe], &haystack), Some(1), true);
+        assert_eq!(index_of_bytes(&vec![0xad, 0xbe, 0xef], &haystack), Some(1), true);
+        assert_eq!(index_of_bytes(&vec![0xad, 0xbe, 0xef, 0xef], &haystack), None, true);
+        assert_eq!(index_of_bytes(&vec![0xde,], &haystack), Some(0), true);
     }
 
 
