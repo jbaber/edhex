@@ -25,7 +25,6 @@ dependencies = [
  "ansi_term",
  "edhex_core",
  "regex",
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -33,6 +32,8 @@ name = "edhex_core"
 version = "0.1.1"
 dependencies = [
  "ansi_term",
+ "regex",
+ "unicode-segmentation",
 ]
 
 [[package]]
