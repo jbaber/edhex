@@ -260,7 +260,7 @@ impl Command {
         let re_search = Regex::new(r"^ *(?P<direction>[/?]) *(?P<bytes>[0-9a-fA-F]+) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[mnopsxqwik]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hmnopsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -1149,8 +1149,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
     };
 
     if !quiet {
-        println!("{} bytes\n? for help\n",
-                hex_unless_dec(state.all_bytes.len(), state.radix));
+        println!("h for help\n");
         print_state(&state);
         println!();
         print_bytes(&state, state.range());
@@ -1245,7 +1244,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                     },
 
                     /* Help */
-                    '?'|'h' => {
+                    'h' => {
                         print_help();
                     },
 
