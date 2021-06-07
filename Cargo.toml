@@ -1,6 +1,6 @@
 [package]
 name = "edhex"
-version = "0.2.11"
+version = "0.2.12"
 authors = ["John Baber-Lucero <cargo@frundle.com>"]
 license = "GPL-3.0"
 description = "Hex editor that works vaguely like ed"
@@ -13,3 +13,4 @@ edition = "2018"
 regex = "1.4.5"
 ansi_term = "0.12.1"
 unicode-segmentation = "1.6.0"
+edhex_core = { path = "../edhex_core", version = "0.1.0" }

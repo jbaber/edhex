@@ -1,14 +1,22 @@
 use std::cmp::min;
-use std::fmt;
 use std::num::NonZeroUsize;
 use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::io::Write;
 use regex::Regex;
-use ansi_term::Color;
-use ansi_term::Color::Fixed;
 use unicode_segmentation::UnicodeSegmentation;
+use ec::Byte;
+use ec::State;
+use ec::hex_unless_dec_with_radix;
+use ec::hex_unless_dec;
+
+// TODO This is deprecated and should be
+// replaced with
+//     ec = {package = "edhex_core", version = "0.1.0}
+// in Cargo.toml.  But that's only going to
+// work for after Rust 1.26.0  Far enough in the future, use the Cargo.toml way.
+extern crate edhex_core as ec;
 
 
 macro_rules! skip_bad_range {
@@ -20,67 +28,6 @@ macro_rules! skip_bad_range {
     };
 }
 
-
-/* Byte formatting stuff lifted from hexyl */
-const COLOR_NULL: Color = Fixed(1);
-const COLOR_ASCII_PRINTABLE: Color = Color::Cyan;
-const COLOR_ASCII_WHITESPACE: Color = Color::Green;
-const COLOR_ASCII_OTHER: Color = Color::Purple;
-const COLOR_NONASCII: Color = Color::Yellow;
-
-pub enum ByteCategory {
-    Null,
-    AsciiPrintable,
-    AsciiWhitespace,
-    AsciiOther,
-    NonAscii,
-}
-
-#[derive(Copy, Clone)]
-struct Byte(u8);
-
-impl Byte {
-    fn category(self) -> ByteCategory {
-        if self.0 == 0x00 {
-            ByteCategory::Null
-        } else if self.0.is_ascii_graphic() {
-            ByteCategory::AsciiPrintable
-        } else if self.0.is_ascii_whitespace() {
-            ByteCategory::AsciiWhitespace
-        } else if self.0.is_ascii() {
-            ByteCategory::AsciiOther
-        } else {
-            ByteCategory::NonAscii
-        }
-    }
-
-    fn color(self) -> &'static Color {
-        use crate::ByteCategory::*;
-
-        match self.category() {
-            Null => &COLOR_NULL,
-            AsciiPrintable => &COLOR_ASCII_PRINTABLE,
-            AsciiWhitespace => &COLOR_ASCII_WHITESPACE,
-            AsciiOther => &COLOR_ASCII_OTHER,
-            NonAscii => &COLOR_NONASCII,
-        }
-    }
-
-    fn as_char(self) -> char {
-        use crate::ByteCategory::*;
-
-        match self.category() {
-
-            /* hexyl uses 0 here, depending on color to distinguish */
-            Null => '•',
-            AsciiPrintable => self.0 as char,
-            AsciiWhitespace if self.0 == 0x20 => ' ',
-            AsciiWhitespace => '_',
-            AsciiOther => '•',
-            NonAscii => '×',
-        }
-    }
-}
 
 #[derive(Debug)]
 struct Command {
@@ -595,16 +542,6 @@ impl Command {
 }
 
 
-fn string_from_radix(radix: u32) -> String {
-    if radix == 10 {
-        "decimal".to_owned()
-    }
-    else {
-        "hex".to_owned()
-    }
-}
-
-
 fn get_input_or_die() -> Result<String, i32> {
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
@@ -621,24 +558,6 @@ fn get_input_or_die() -> Result<String, i32> {
         Err(_) => {
             println!("Unable to read input");
             Err(3)
-        }
-    }
-}
-
-
-fn num_bytes_or_die(open_file: &Option<std::fs::File>) -> Result<usize, i32> {
-    if open_file.is_none() {
-        return Ok(0);
-    }
-
-    let metadata = open_file.as_ref().unwrap().metadata();
-    match metadata {
-        Ok(metadata) => {
-            Ok(metadata.len() as usize)
-        }
-        Err(_) => {
-            println!("Couldn't find file size");
-            Err(2)
         }
     }
 }
@@ -852,29 +771,6 @@ mod tests {
 }
 
 
-fn print_state(state:&State) {
-    println!("At byte {} of {}", lino(&state),
-            hex_unless_dec_with_radix(state.all_bytes.len(), state.radix));
-    if state.show_byte_numbers {
-        println!("Printing byte numbers in {}",
-            string_from_radix(state.radix));
-    };
-    if state.show_chars {
-        println!("Printing char representations after bytes");
-    };
-    println!("Interpreting input numbers as {}",
-            string_from_radix(state.radix));
-    println!("Printing a newline every {} bytes",
-            hex_unless_dec_with_radix(usize::from(state.width), state.radix));
-    if state.unsaved_changes {
-        println!("Unwritten changes");
-    }
-    else {
-        println!("No unwritten changes");
-    }
-}
-
-
 /// returns index of the byte in the 0-th column of the last row printed
 fn print_bytes(state:&State, range:(usize, usize)) -> Option<usize> {
     if state.empty() {
@@ -963,85 +859,6 @@ fn number_dot_dollar(index:usize, _max_index:usize, input:&str, radix:u32)
 }
 
 
-fn hex_unless_dec_with_radix(number:usize, radix:u32) -> String {
-    let letter = if radix == 10 {
-        'd'
-    }
-    else {
-        'x'
-    };
-
-    format!("0{}{}", letter, hex_unless_dec(number, radix))
-}
-
-
-fn hex_unless_dec(number:usize, radix:u32) -> String {
-    if radix == 10 {
-        format!("{}", number)
-    }
-    else {
-        format!("{:x}", number)
-    }
-}
-
-
-fn lino(state:&State) -> String {
-    hex_unless_dec_with_radix(state.index, state.radix)
-}
-
-
-struct State {
-    radix: u32,
-    show_byte_numbers: bool,
-    show_chars: bool,
-    unsaved_changes: bool,
-    filename: String,
-
-    show_prompt: bool,
-    color: bool,
-
-    /* Current byte number, 0 to len -1 */
-    index: usize,
-
-    width: NonZeroUsize,
-
-    /* The bytes in memory */
-    all_bytes: Vec<u8>,
-
-    /* Spaces to put between a byte number and a byte when displaying */
-    n_padding: String,
-}
-
-
-impl fmt::Debug for State {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "radix: {}|unsaved_changes: {}|show_byte_numbers: {}|show_chars: {}|index: {}|width: {}|n_padding: '{}'|filename: {}|",
-                self.radix, self.unsaved_changes, self.show_byte_numbers,
-                self.show_chars, self.index, self.width, self.n_padding,
-                self.filename)
-    }
-}
-
-
-impl State {
-    fn empty(&self) -> bool {
-        self.all_bytes.len() == 0
-    }
-
-    fn range(&self) -> (usize, usize) {
-        (self.index, self.index + usize::from(self.width) - 1)
-    }
-
-    fn max_index(&self) -> Result<usize, String> {
-        if self.all_bytes.len() == 0 {
-            Err("No bytes, so no max index.".to_owned())
-        }
-        else {
-            Ok(self.all_bytes.len() - 1)
-        }
-    }
-}
-
 /// Returns new index number
 fn minuses(state:&mut State, num_minuses:usize) -> Result<usize, String> {
     if state.empty() {
@@ -1103,7 +920,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         }
     };
 
-    let original_num_bytes = match num_bytes_or_die(&file) {
+    let original_num_bytes = match ec::num_bytes_or_die(&file) {
         Ok(num_bytes) => {
             num_bytes
         },
@@ -1133,7 +950,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
 
     // TODO Below here should be a function called main_loop()
-    let mut state = State{
+    let mut state = ec::State{
         radix: 16,
         filename: filename.to_owned(),
         show_byte_numbers: true,
@@ -1150,7 +967,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
     if !quiet {
         println!("h for help\n");
-        print_state(&state);
+        state.print_state();
         println!();
         print_bytes(&state, state.range());
     }
@@ -1380,7 +1197,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                     /* Print state */
                     's' => {
-                        print_state(&state);
+                        state.print_state();
                     },
 
                     /* Write out */
