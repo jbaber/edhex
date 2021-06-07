@@ -17,6 +17,10 @@ Options:
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();
 
+    let possible_args = [
+        "-h", "--help", "-v", "--version", "-q", "--quiet", "-n", "--no-color",
+    ];
+
     if args.iter().position(|x| x == "-h" || x == "--help").is_some() {
         print_help(&args[0]);
         std::process::exit(0);
@@ -34,12 +38,24 @@ fn main() {
 
     let quiet = args.iter().position(|x| x == "-q" || x == "--quiet" || x == "-qn" || x == "-nq").is_some();
     let color = !args.iter().position(|x| x == "-n" || x == "--no-color" || x == "-qn" || x == "-nq").is_some();
-    let filename = args.last();
 
-    if let Some(filename) = filename {
-        std::process::exit(edhex::actual_runtime(&filename, quiet, color))
+    /* First non-flag considered the filename */
+    let mut filename_given = false;
+    let mut filename = "";
+    for index in 1..args.len() {
+        let cur = &args[index];
+        if !possible_args.iter().position(|x| x == &cur).is_some() {
+            filename_given = true;
+            filename = &cur;
+        }
     }
-    else {
+
+
+    if !filename_given {
+        println!("No filename provided");
+        print_help(&args[0]);
         std::process::exit(1)
     }
+
+    std::process::exit(edhex::actual_runtime(&filename, quiet, color))
 }

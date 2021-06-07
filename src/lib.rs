@@ -88,8 +88,6 @@ fn read_bytes_from_user() -> Result<Vec<u8>, String> {
 }
 
 
-
-
 impl Command {
     fn bad_range(&self, all_bytes: &Vec<u8>) -> bool {
         ec::bad_range(all_bytes, self.range)
