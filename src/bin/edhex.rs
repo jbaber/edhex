@@ -37,9 +37,9 @@ fn main() {
     let filename = args.last();
 
     if let Some(filename) = filename {
-        return std::process::exit(edhex::actual_runtime(&filename, quiet, color));
+        std::process::exit(edhex::actual_runtime(&filename, quiet, color))
     }
     else {
-        return std::process::exit(1);
+        std::process::exit(1)
     }
 }
