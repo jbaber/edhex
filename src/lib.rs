@@ -967,7 +967,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
     if !quiet {
         println!("h for help\n");
-        state.print_state();
+        println!("{}", state);
         println!();
         print_bytes(&state, state.range());
     }
@@ -1197,7 +1197,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                     /* Print state */
                     's' => {
-                        state.print_state();
+                        println!("{}", state);
                     },
 
                     /* Write out */
