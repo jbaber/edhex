@@ -3,6 +3,8 @@ edhex
 
 A hex editor that works vaguely like ed
 
+![screenshot](screenshot.png?raw=true)
+
 Usage
 -----
 edhex <filename>
