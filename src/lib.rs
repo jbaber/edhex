@@ -2,7 +2,6 @@ use ec::hex_unless_dec;
 use ec::State;
 use regex::Regex;
 use std::cmp::min;
-use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::io::Write;
@@ -524,17 +523,14 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
 
 
 pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
-    let file = match File::open(filename) {
-        Ok(filehandle) => {
+    let file = match ec::filehandle(filename) {
+        Ok(Some(filehandle)) => {
             Some(filehandle)
         },
+        Ok(None) => None,
         Err(error) => {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                None
-            }
-            else {
-                return 3;
-            }
+            println!("Problem opening '{}'", filename);
+            return 3;
         }
     };
 

@@ -1,3 +1,10 @@
+// TODO This is deprecated and should be
+// replaced with
+//     ec = {package = "edhex_core", version = "0.1.0}
+// in Cargo.toml.  But that's only going to
+// work for after Rust 1.26.0  Far enough in the future, use the Cargo.toml way.
+extern crate edhex_core as ec;
+
 fn print_help(name:&str) {
     println!("Usage: {} [options] <filename>
 
@@ -27,12 +34,7 @@ fn main() {
     }
 
     if args.iter().position(|x| x == "-v" || x == "--version").is_some() {
-        if let Some(version) = option_env!("CARGO_PKG_VERSION") {
-            println!("{}", version);
-        }
-        else {
-            println!("Version unknown (not compiled with cargo)");
-        }
+        ec::print_cargo_version();
         std::process::exit(0);
     }
 
