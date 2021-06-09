@@ -48,6 +48,8 @@ $            Move to last byte and print it
                and print.
 ?deadbeef    If the bytes de ad be ef exist before the current index, move there
                and print.
+/            Perform last search again starting at next byte
+?            Perform last search (backwards) again starting at previous byte
 k            Delete (kill) byte at current index and print new line of byte(s)
 7dk          Move to byte 7d, delete that byte, and print from there.
 1d,72k       Move to byte 1d, delete bytes 1d - 72 inclusive, and print from there.
@@ -93,7 +95,7 @@ impl Command {
     }
 
 
-    fn from_state_and_line(state:&State, line: &str) -> Result<Command, String> {
+    fn from_state_and_line(state:&mut State, line: &str) -> Result<Command, String> {
         // TODO Make these constants outside of this function so they don't get
         // created over and over
         // TODO Allow general whitespace, not just literal spaces
@@ -101,6 +103,7 @@ impl Command {
         let re_pluses = Regex::new(r"^ *(?P<pluses>\++) *$").unwrap();
         let re_minuses = Regex::new(r"^ *(?P<minuses>\-+) *$").unwrap();
         let re_search = Regex::new(r"^ *(?P<direction>[/?]) *(?P<bytes>[0-9a-fA-F]+) *$").unwrap();
+        let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
         let re_single_char_command = Regex::new(r"^ *(?P<command>[hmnopsxqwik]).*$").unwrap();
@@ -116,6 +119,7 @@ impl Command {
         let is_minuses             = re_minuses.is_match(line);
         let is_range               = re_range.is_match(line);
         let is_search              = re_search.is_match(line);
+        let is_search_again        = re_search_again.is_match(line);
         let is_search_kill         = re_search_kill.is_match(line);
         let is_search_insert       = re_search_insert.is_match(line);
         let is_specified_index     = re_specified_index.is_match(line);
@@ -130,6 +134,9 @@ impl Command {
         }
         else if is_search {
             re_search
+        }
+        else if is_search_again {
+            re_search_again
         }
         else if is_search_insert {
             re_search_insert
@@ -217,11 +224,52 @@ impl Command {
             }
         }
 
+        else if is_search_again {
+            if state.last_search.is_none() {
+                return Err(format!("No previous search."));
+            }
+
+            let needle = state.last_search.to_owned().unwrap();
+
+            let caps = caps.unwrap();
+            let forward = caps.name("direction").unwrap().as_str() == "/";
+
+            /* Notice looking after current byte */
+            let haystack = if forward {
+                &state.all_bytes[(state.index + 1)..]
+            }
+            else {
+                &state.all_bytes[..(state.index - 1)]
+            };
+
+            if let Some(offset) = ec::index_of_bytes(&needle, haystack, forward) {
+                if forward {
+                    Ok(Command{
+                        range: (state.index + 1 + offset, state.index + 1 + offset),
+                        command: 'g',
+                        args: vec![],
+                    })
+                }
+                else {
+                    Ok(Command{
+                        range: (offset, offset),
+                        command: 'g',
+                        args: vec![],
+                    })
+                }
+            }
+            else {
+                Err(format!("{} not found", ec::string_from_bytes(&needle)))
+            }
+        }
+
         else if is_search {
             let caps = caps.unwrap();
             let forward = caps.name("direction").unwrap().as_str() == "/";
             match ec::bytes_from_string(caps.name("bytes").unwrap().as_str()) {
                 Ok(needle) => {
+                    state.last_search = Some(needle.to_owned());
+
                     let haystack = if forward {
                         &state.all_bytes[state.index..]
                     }
@@ -529,7 +577,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         },
         Ok(None) => None,
         Err(error) => {
-            println!("Problem opening '{}'", filename);
+            println!("Problem opening '{}' ({:?})", filename, error);
             return 3;
         }
     };
@@ -577,6 +625,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         all_bytes: all_bytes,
         // TODO calculate based on longest possible index
         n_padding: "      ".to_owned(),
+        last_search: None,
     };
 
     if !quiet {
@@ -598,7 +647,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
             }
         };
 
-        match Command::from_state_and_line(&state, &input) {
+        match Command::from_state_and_line(&mut state, &input) {
             Ok(command) => {
                 // println!("{:?}", command);
                 match command.command {
