@@ -114,6 +114,8 @@ impl Command {
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
         let re_matches_nothing = Regex::new(r"^a\bc").unwrap();
         let re_width = Regex::new(r"^ *W *(?P<width>[0-9A-Fa-f]+) *$").unwrap();
+        let re_before_context = Regex::new(r"^ *T *(?P<before_context>[0-9A-Fa-f]+) *$").unwrap();
+        let re_after_context = Regex::new(r"^ *t *(?P<after_context>[0-9A-Fa-f]+) *$").unwrap();
 
         let is_blank_line          = re_blank_line.is_match(line);
         let is_single_char_command = re_single_char_command.is_match(line);
@@ -127,6 +129,8 @@ impl Command {
         let is_specified_index     = re_specified_index.is_match(line);
         let is_offset_index        = re_offset_index.is_match(line);
         let is_width               = re_width.is_match(line);
+        let is_before_context      = re_before_context.is_match(line);
+        let is_after_context       = re_after_context.is_match(line);
 
         let re = if is_blank_line {
             re_blank_line
@@ -160,6 +164,12 @@ impl Command {
         }
         else if is_offset_index {
             re_offset_index
+        }
+        else if is_before_context {
+            re_before_context
+        }
+        else if is_after_context {
+            re_after_context
         }
         else if is_width {
             re_width
@@ -337,6 +347,36 @@ impl Command {
                 command: '\n',
                 args: vec![],
             })
+        }
+
+        else if is_before_context {
+            let caps = caps.unwrap();
+            let given = caps.name("before_context").unwrap().as_str();
+            if let Ok(before_context) = usize::from_str_radix(given, state.radix) {
+              Ok(Command{
+                  range: (usize::from(before_context), usize::from(before_context)),
+                  command: 'T',
+                  args: vec![],
+              })
+            }
+            else {
+                Err(format!("Can't interpret {} as a number", given))
+            }
+        }
+
+        else if is_after_context {
+            let caps = caps.unwrap();
+            let given = caps.name("after_context").unwrap().as_str();
+            if let Ok(after_context) = usize::from_str_radix(given, state.radix) {
+              Ok(Command{
+                  range: (usize::from(after_context), usize::from(after_context)),
+                  command: 't',
+                  args: vec![],
+              })
+            }
+            else {
+                Err(format!("Can't interpret {} as a number", given))
+            }
         }
 
         else if is_width {
@@ -623,6 +663,8 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         show_chars: true,
         unsaved_changes: false,
         index: 0,
+        before_context: 0,
+        after_context: 0,
         width: NonZeroUsize::new(16).unwrap(),
         all_bytes: all_bytes,
         // TODO calculate based on longest possible index
