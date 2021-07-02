@@ -35,7 +35,7 @@ struct Command {
 
 fn print_help() {
     print!("Input/output is hex unless toggled to decimal with 'x'
-h            This help
+h            This (h)elp
 <Enter>      Print current byte(s) and move forward to next set of byte(s)
 3d4          Move to byte number 3d4 and print from there
 +            Move 1 byte forward and print from there
@@ -50,27 +50,29 @@ $            Move to last byte and print it
                and print.
 /            Perform last search again starting at next byte
 ?            Perform last search (backwards) again starting at previous byte
-k            Delete (kill) byte at current index and print new line of byte(s)
-7dk          Move to byte 7d, delete that byte, and print from there.
-1d,72k       Move to byte 1d, delete bytes 1d - 72 inclusive, and print from there.
+k            Delete/(k)ill byte at current index and print new line of byte(s)
+7dk          Move to byte 7d, (k)ill that byte, and print from there.
+1d,72k       Move to byte 1d, (k)ill bytes 1d - 72 inclusive, and print from there.
 /deadbeef/k  If the bytes de ad be ef exist after the current index, move there,
-               delete those bytes, and print.
-i            Prompt you to write out bytes which will be inserted at current index
+               (k)ill those bytes, and print.
+i            Prompt you to write out bytes which will be (i)nserted at current index
 72i          Move to byte number 72 and prompt you to enter bytes which will be
-               inserted there.
+               (i)nserted there.
 /deadbeef/i  If the bytes de ad be ef exist after the current index, move there
-               and prompt you to enter bytes which will be inserted there.
-12,3dp       Print bytes 12 - 3d inclusive, move to leftmost byte printed on the
+               and prompt you to enter bytes which will be (i)nserted there.
+12,3dp       (p)rint bytes 12 - 3d inclusive, move to leftmost byte printed on the
                last line.
 m            Toggle whether or not characters are printed after bytes
-n            Toggle whether or not byte numbers are printed before bytes
-o            Toggle using color
-p            Print current line of byte(s) (depending on 'W')
-s            Print state of all toggles and 'W'idth
-x            Toggle interpreting inputs and displaying output as hex or decimal
-w            Actually write changes to the file on disk
-W3d          Print a linebreak every 3d bytes [Default 0x10]
-q            quit
+n            Toggle whether or not byte (n)umbers are printed before bytes
+o            Toggle using c(o)lor
+p            (p)rint current line of byte(s) (depending on 'W')
+s            Print (s)tate of all toggles and 'W'idth
+t3d          Print 0x3d lines of con(t)extual bytes after current line [Default 0]
+T3d          Print 0x3d lines of con(T)extual bytes before current line [Default 0]
+x            Toggle interpreting inputs and displaying output as he(x) or decimal
+w            Actually (w)rite changes to the file on disk
+W3d          Set (W)idth to 0x3d.  i.e. print a linebreak every 3d bytes [Default 0x10]
+q            (q)uit
 ");
 }
 
