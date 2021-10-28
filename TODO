@@ -1,2 +1,4 @@
 - Handle things like "$-10"
 - docs.rs documentation
+- After 'k' print with context
+- Update "unwritten changes" correctly
