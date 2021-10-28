@@ -862,7 +862,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
-                        if let Some(last_left_col_index) = state.print_bytes_sans_context(state.range()) {
+                        if let Some(last_left_col_index) = state.print_bytes() {
                             state.index = last_left_col_index;
                         }
                         else {
@@ -905,6 +905,16 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                     /* Print state */
                     's' => {
                         println!("{}", state);
+                    },
+
+                    /* Change after_context */
+                    't' => {
+                        state.after_context = usize::from(command.range.0);
+                    },
+
+                    /* Change before_context */
+                    'T' => {
+                        state.before_context = usize::from(command.range.0);
                     },
 
                     /* Write out */
