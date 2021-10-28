@@ -60,8 +60,7 @@ i            Prompt you to write out bytes which will be (i)nserted at current i
                (i)nserted there.
 /deadbeef/i  If the bytes de ad be ef exist after the current index, move there
                and prompt you to enter bytes which will be (i)nserted there.
-12,3dp       (p)rint bytes 12 - 3d inclusive, move to leftmost byte printed on the
-               last line.
+12,3dp       (p)rint bytes 12 - 3d inclusive, move to byte 12
 m            Toggle whether or not characters are printed after bytes
 n            Toggle whether or not byte (n)umbers are printed before bytes
 o            Toggle using c(o)lor
@@ -706,7 +705,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                     'g' => {
                         match ec::move_to(&mut state, command.range.0) {
                             Ok(_) => {
-                                state.print_bytes_sans_context(state.range());
+                                state.print_bytes();
                             },
                             Err(error) => {
                                 println!("? ({})", error);
@@ -862,12 +861,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
-                        if let Some(last_left_col_index) = state.print_bytes() {
-                            state.index = last_left_col_index;
-                        }
-                        else {
-                            println!("? (bad range {:?}", state.range());
-                        }
+                        state.print_bytes();
                     },
 
                     /* Print byte(s) with range */
@@ -879,8 +873,8 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
-                        if let Some(last_left_col_index) = state.print_bytes_sans_context((command.range.0, command.range.1)) {
-                        state.index = last_left_col_index;
+                        if state.print_bytes_sans_context((command.range.0, command.range.1)).is_some() {
+                            state.index = command.range.0;
                         }
                         else {
                             println!("? (bad range {:?}", command.range);
@@ -894,7 +888,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                             continue;
                         };
 
-                        state.print_bytes_sans_context(state.range());
+                        state.print_bytes();
                     },
 
                     /* Quit */
