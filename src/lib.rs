@@ -578,7 +578,7 @@ fn minuses(state:&mut State, num_minuses:usize) -> Result<usize, String> {
     }
     else {
         state.index -= num_minuses;
-        state.print_bytes_sans_context(state.range());
+        state.print_bytes_sans_context(state.range(), false);
         Ok(state.index)
     }
 }
@@ -599,7 +599,7 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
                 }
                 else {
                     state.index += num_pluses;
-                    state.print_bytes_sans_context(state.range());
+                    state.print_bytes_sans_context(state.range(), false);
                     Ok(state.index)
                 }
             },
@@ -675,7 +675,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         println!("h for help\n");
         println!("{}", state);
         println!();
-        state.print_bytes_sans_context(state.range());
+        state.print_bytes_sans_context(state.range(), false);
     }
 
     loop {
@@ -758,7 +758,8 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                                 }
                                 state.all_bytes = new;
                                 state.unsaved_changes = true;
-                                state.print_bytes_sans_context(state.range());
+                                state.print_bytes_sans_context(state.range(),
+                                        false);
                             },
                             Err(error) => {
                                 println!("? ({})", error);
@@ -783,7 +784,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                         right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
                         state.all_bytes.append(&mut right_half);
                         state.index = command.range.0;
-                        state.print_bytes_sans_context(state.range());
+                        state.print_bytes_sans_context(state.range(), false);
                     },
 
                     /* Toggle showing char representations of bytes */
@@ -842,8 +843,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                                 }
                                 else {
                                     state.index = first_byte_to_show_index;
-                                    state.print_bytes_sans_context((first_byte_to_show_index,
-                                            last_byte_to_show_index));
+                                    state.print_bytes();
                                 }
                             },
                             Err(error) => {
@@ -873,7 +873,8 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
-                        if state.print_bytes_sans_context((command.range.0, command.range.1)).is_some() {
+                        if state.print_bytes_sans_context((command.range.0,
+                                command.range.1), false).is_some() {
                             state.index = command.range.0;
                         }
                         else {
