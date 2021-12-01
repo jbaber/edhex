@@ -37,6 +37,7 @@ fn print_help() {
     print!("Input/output is hex unless toggled to decimal with 'x'
 h            This (h)elp
 <Enter>      Print current byte(s) and move forward to next set of byte(s)
+j            (j)ump back to previous set of byte(s) and print
 3d4          Move to byte number 3d4 and print from there
 +            Move 1 byte forward and print from there
 +++          Move 3 bytes forward and print from there
@@ -107,7 +108,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hmnopsxqwik]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hjmnopsxqwik]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -771,6 +772,21 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                     'h' => {
                         print_help();
                     },
+
+                    /* User wants to go up a line */
+                    'j' => {
+                        if state.empty() {
+                            println!("? (Empty file)");
+                            continue;
+                        };
+
+                        let width = usize::from(state.width);
+                        let first_byte_to_show_index =
+                                state.index.saturating_sub(width);
+                        state.index = first_byte_to_show_index;
+                        state.print_bytes();
+                    }
+
 
                     /* 'k'ill byte(s) (Can't use 'd' because that's a hex
                     * character! */
