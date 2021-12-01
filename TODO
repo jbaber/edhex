@@ -1,6 +1,5 @@
 - Handle things like "$-10"
 - docs.rs documentation
-- After 'k' print with context
 - Update "unwritten changes" correctly
 - Have a command for going back one line (opposite of <Enter>)
 - Allow creating a new file by calling with no filename
