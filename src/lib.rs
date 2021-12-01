@@ -578,7 +578,7 @@ fn minuses(state:&mut State, num_minuses:usize) -> Result<usize, String> {
     }
     else {
         state.index -= num_minuses;
-        state.print_bytes_sans_context(state.range(), false);
+        state.print_bytes();
         Ok(state.index)
     }
 }
@@ -599,7 +599,7 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
                 }
                 else {
                     state.index += num_pluses;
-                    state.print_bytes_sans_context(state.range(), false);
+                    state.print_bytes();
                     Ok(state.index)
                 }
             },
