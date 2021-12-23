@@ -20,7 +20,7 @@ dependencies = [
 
 [[package]]
 name = "edhex"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "ansi_term",
  "edhex_core",
@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "edhex_core"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "ansi_term",
  "regex",
