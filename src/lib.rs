@@ -612,6 +612,14 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
 }
 
 
+pub fn cargo_version() -> Result<String, String> {
+    if let Some(version) = option_env!("CARGO_PKG_VERSION") {
+        return Ok(String::from(version));
+    }
+    return Err("Version unknown (not compiled with cargo)".to_string());
+}
+
+
 pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
     let file = match ec::filehandle(filename) {
         Ok(Some(filehandle)) => {

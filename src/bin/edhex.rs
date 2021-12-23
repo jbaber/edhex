@@ -15,20 +15,9 @@ Options:
     -n, --no-color
     -q, --quiet        Don't print prompts or initial help text and state
                        e.g. for clean output when piping commands into the program
-    -v, --version      Print version (if compiled with cargo)
-    -c, --core-version Print version of core library (if compiled with cargo)
+    -v, --version      Print versions (if compiled with cargo)
     <filename>     Name of file to be edited
 ", name, name);
-}
-
-
-fn print_cargo_version() {
-    if let Some(version) = option_env!("CARGO_PKG_VERSION") {
-        println!("{}", version);
-    }
-    else {
-        println!("Version unknown (not compiled with cargo)");
-    }
 }
 
 
@@ -45,13 +34,22 @@ fn main() {
     }
 
     if args.iter().position(|x| x == "-v" || x == "--version").is_some() {
-        // ec::print_cargo_version();
-        print_cargo_version();
-        std::process::exit(0);
-    }
-
-    if args.iter().position(|x| x == "-c" || x == "--core-version").is_some() {
-        ec::print_cargo_version();
+        println!("edhex:      {}", match edhex::cargo_version() {
+            Ok(version) => {
+                version
+            },
+            Err(message) => {
+                message
+            }
+        });
+        println!("edhex_core: {}", match ec::cargo_version() {
+            Ok(version) => {
+                version
+            },
+            Err(message) => {
+                message
+            }
+        });
         std::process::exit(0);
     }
 
