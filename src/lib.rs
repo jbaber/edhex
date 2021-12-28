@@ -3,7 +3,6 @@ use ec::State;
 use regex::Regex;
 use std::cmp::min;
 use std::io;
-use std::io::Read;
 use std::io::Write;
 use std::num::NonZeroUsize;
 
@@ -621,45 +620,11 @@ pub fn cargo_version() -> Result<String, String> {
 
 
 pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
-    let file = match ec::filehandle(filename) {
-        Ok(Some(filehandle)) => {
-            Some(filehandle)
-        },
-        Ok(None) => None,
-        Err(error) => {
-            println!("Problem opening '{}' ({:?})", filename, error);
-            return 3;
-        }
-    };
-
-    let original_num_bytes = match ec::num_bytes_or_die(&file) {
-        Ok(num_bytes) => {
-            num_bytes
-        },
-        Err(errcode) => {
-            return errcode;
-        }
-    };
-
-    /* Read all bytes into memory just like real ed */
-    // TODO A real hex editor needs to buffer
-    let mut all_bytes = Vec::new();
-    if file.is_some() {
-        match file.unwrap().read_to_end(&mut all_bytes) {
-            Err(_) => {
-                println!("Couldn't read {}", filename);
-                return 4;
-            },
-            Ok(num_bytes_read) => {
-                if num_bytes_read != original_num_bytes {
-                    println!("Only read {} of {} bytes of {}", num_bytes_read,
-                            original_num_bytes, filename);
-                    return 5;
-                }
-            }
-        }
+    let maybe_all_bytes = ec::all_bytes_from_filename(filename);
+    if maybe_all_bytes.is_err() {
+        println!("{:?}", maybe_all_bytes);
+        return 1;
     }
-
 
     // TODO Below here should be a function called main_loop()
     let mut state = ec::State{
@@ -674,7 +639,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         before_context: 0,
         after_context: 0,
         width: NonZeroUsize::new(16).unwrap(),
-        all_bytes: all_bytes,
+        all_bytes: maybe_all_bytes.unwrap(),
         // TODO calculate based on longest possible index
         n_padding: "      ".to_owned(),
         last_search: None,
