@@ -2,3 +2,4 @@
 - docs.rs documentation
 - Update "unwritten changes" correctly
 - Allow creating a new file by calling with no filename
+- Readonly mode
