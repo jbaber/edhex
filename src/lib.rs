@@ -704,6 +704,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         color: color,
         show_chars: true,
         unsaved_changes: (filename == ""),
+        readonly: false,
         index: 0,
         before_context: 0,
         after_context: 0,

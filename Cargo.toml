@@ -11,5 +11,5 @@ edition = "2018"
 
 [dependencies]
 ansi_term = "0.12.1"
-edhex_core = { path = "../edhex_core", version = "0.2.6" }
+edhex_core = { path = "../edhex_core", version = "0.3.0" }
 regex = "1.4.5"
