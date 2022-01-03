@@ -6,7 +6,7 @@
 extern crate edhex_core as ec;
 
 fn print_help(name:&str) {
-    println!("Usage: {} [options] <filename>
+    println!("Usage: {} [options] [<filename>]
 
 {} will read interactively from the user, or read commands from STDIN
 
@@ -16,7 +16,8 @@ Options:
     -q, --quiet        Don't print prompts or initial help text and state
                        e.g. for clean output when piping commands into the program
     -v, --version      Print versions (if compiled with cargo)
-    <filename>     Name of file to be edited
+    <filename>         Name of file to be edited.  If not given, a new file will
+                       be created on write.
 ", name, name);
 }
 
@@ -69,9 +70,7 @@ fn main() {
 
 
     if !filename_given {
-        println!("No filename provided");
-        print_help(&args[0]);
-        std::process::exit(1)
+        println!("No filename provided\nOpening empty buffer");
     }
 
     std::process::exit(edhex::actual_runtime(&filename, quiet, color))

@@ -76,6 +76,33 @@ q            (q)uit
 }
 
 
+fn read_string_from_user(prompt: Option<&str>) -> Result<String, String> {
+    print!("{}", if prompt.is_none() {
+            "> "
+        }
+        else {
+            prompt.unwrap()
+        }
+    );
+
+    io::stdout().flush().unwrap();
+    let result = get_input_or_die();
+
+    if result.is_ok() {
+        Ok(result.unwrap())
+    }
+
+    /* Consider EOF empty string */
+    else if result == Err(0) {
+        Ok("".to_owned())
+    }
+
+    else {
+        Err("Couldn't read input from user".to_owned())
+    }
+}
+
+
 fn read_bytes_from_user() -> Result<Vec<u8>, String> {
     print!("> ");
     io::stdout().flush().unwrap();
@@ -619,12 +646,41 @@ pub fn cargo_version() -> Result<String, String> {
 }
 
 
-pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
-    let maybe_all_bytes = ec::all_bytes_from_filename(filename);
-    if maybe_all_bytes.is_err() {
-        println!("{:?}", maybe_all_bytes);
-        return 1;
+pub fn write_out(state: &mut ec::State) {
+    
+    /* Early return if write unsuccessful */
+    if state.filename != "" {
+        let result = std::fs::write(&state.filename, &state.all_bytes);
+        if result.is_err() {
+            println!("? (Couldn't write to {})", state.filename);
+            return;
+        }
     }
+    else {
+        let filename = read_string_from_user(None);
+        if filename.is_err() {
+            println!("? {:?}", filename);
+            return;
+        }
+        let filename = filename.unwrap();
+
+        /* filename is a string */
+        let result = std::fs::write(&filename, &state.all_bytes);
+        if result.is_err() {
+            println!("? (Couldn't write to given filename '{}')", filename);
+            return;
+        }
+
+        state.filename = filename;
+        println!("Write successfull, changing filename to '{}'", state.filename);
+    }
+
+    state.unsaved_changes = false;
+}
+
+
+/// If `filename` is "", open an empty buffer
+pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
     // TODO Below here should be a function called main_loop()
     let mut state = ec::State{
@@ -634,12 +690,23 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         show_prompt: !quiet,
         color: color,
         show_chars: true,
-        unsaved_changes: false,
+        unsaved_changes: (filename == ""),
         index: 0,
         before_context: 0,
         after_context: 0,
         width: NonZeroUsize::new(16).unwrap(),
-        all_bytes: maybe_all_bytes.unwrap(),
+        all_bytes: if filename == "" {
+                Vec::new()
+            }
+            else {
+                let maybe_all_bytes = ec::all_bytes_from_filename(filename);
+                if maybe_all_bytes.is_err() {
+                    println!("{:?}", maybe_all_bytes);
+                    return 1;
+                }
+                maybe_all_bytes.unwrap()
+            }
+        ,
         // TODO calculate based on longest possible index
         n_padding: "      ".to_owned(),
         last_search: None,
@@ -903,10 +970,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
 
                     /* Write out */
                     'w' => {
-                        let result = std::fs::write(filename, &state.all_bytes);
-                        if result.is_err() {
-                            println!("? (Couldn't write to {})", state.filename);
-                        }
+                        write_out(&mut state);
                     },
 
                     /* Change width */
