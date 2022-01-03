@@ -73,5 +73,10 @@ fn main() {
         println!("No filename provided\nOpening empty buffer");
     }
 
+    if filename_given && !ec::is_a_regular_file(filename) {
+        println!("{} isn't a regular file", filename);
+        std::process::exit(1);
+    }
+
     std::process::exit(edhex::actual_runtime(&filename, quiet, color))
 }
