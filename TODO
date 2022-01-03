@@ -1,5 +1,6 @@
 - Handle things like "$-10"
 - docs.rs documentation
 - Update "unwritten changes" correctly
-- Allow creating a new file by calling with no filename
+- Allow creating a new file by calling with not-yet-existing filename
+  - Quit with good message when filename exists and is a directory
 - Readonly mode
