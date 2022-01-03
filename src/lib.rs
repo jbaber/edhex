@@ -68,6 +68,7 @@ p            (p)rint current line of byte(s) (depending on 'W')
 s            Print (s)tate of all toggles and 'W'idth
 t3d          Print 0x3d lines of con(t)extual bytes after current line [Default 0]
 T3d          Print 0x3d lines of con(T)extual bytes before current line [Default 0]
+u            (u)pdate filename to write to
 x            Toggle interpreting inputs and displaying output as he(x) or decimal
 w            Actually (w)rite changes to the file on disk
 W3d          Set (W)idth to 0x3d.  i.e. print a linebreak every 3d bytes [Default 0x10]
@@ -134,7 +135,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hjmnopsxqwik]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqsuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -646,6 +647,18 @@ pub fn cargo_version() -> Result<String, String> {
 }
 
 
+pub fn update_filename(state: &mut ec::State) {
+    let filename = read_string_from_user(Some("Enter new filename: "));
+    if filename.is_err() {
+        println!("? {:?}", filename);
+        return;
+    }
+    let filename = filename.unwrap();
+
+    state.filename = filename;
+}
+
+
 pub fn write_out(state: &mut ec::State) {
     
     /* Early return if write unsuccessful */
@@ -657,7 +670,7 @@ pub fn write_out(state: &mut ec::State) {
         }
     }
     else {
-        let filename = read_string_from_user(None);
+        let filename = read_string_from_user(Some("Enter filename: "));
         if filename.is_err() {
             println!("? {:?}", filename);
             return;
@@ -966,6 +979,11 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
                     /* Change before_context */
                     'T' => {
                         state.before_context = usize::from(command.range.0);
+                    },
+
+                    /* (u)pdate iflename */
+                    'u' => {
+                        update_filename(&mut state);
                     },
 
                     /* Write out */
