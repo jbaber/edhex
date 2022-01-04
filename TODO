@@ -1,7 +1,6 @@
 - Handle things like "$-10"
 - docs.rs documentation
 - Update "unwritten changes" correctly
-- Readonly mode
 - Allow saving of state
 - When called with non-existent file, use that filename
   - Still when called with directory, quit nicely.

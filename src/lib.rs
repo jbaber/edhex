@@ -660,6 +660,10 @@ pub fn update_filename(state: &mut ec::State) {
 
 
 pub fn write_out(state: &mut ec::State) {
+    if state.readonly {
+        println!("? Read-only mode");
+        return;
+    }
     
     /* Early return if write unsuccessful */
     if state.filename != "" {
@@ -693,7 +697,8 @@ pub fn write_out(state: &mut ec::State) {
 
 
 /// If `filename` is "", open an empty buffer
-pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
+pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
+        -> i32 {
 
     // TODO Below here should be a function called main_loop()
     let mut state = ec::State{
@@ -704,7 +709,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool) -> i32 {
         color: color,
         show_chars: true,
         unsaved_changes: (filename == ""),
-        readonly: false,
+        readonly: readonly,
         index: 0,
         before_context: 0,
         after_context: 0,

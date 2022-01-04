@@ -28,6 +28,9 @@ fn main() {
         .set_term_width(79)
         .arg(Arg::with_name("nocolor").short("n").long("no-color")
                 .takes_value(false))
+        .arg(Arg::with_name("readonly").short("R").long("read-only")
+                .takes_value(false).help("Read-only mode.  Don't let you \
+                        write changes to disk."))
         .arg(Arg::with_name("quiet").short("q").long("quiet")
                 .takes_value(false).help("Don't print prompts or initial \
                         help text and state\ne.g. for clean output when \
@@ -44,6 +47,7 @@ fn main() {
         None => "",
         Some(filename) => filename,
     };
+    let readonly = matches.is_present("readonly");
 
     if !filename_given {
         println!("No filename provided\nOpening empty buffer");
@@ -54,5 +58,5 @@ fn main() {
         std::process::exit(1);
     }
 
-    std::process::exit(edhex::actual_runtime(&filename, quiet, color))
+    std::process::exit(edhex::actual_runtime(&filename, quiet, color, readonly))
 }
