@@ -53,7 +53,11 @@ fn main() {
         println!("No filename provided\nOpening empty buffer");
     }
 
-    if filename_given && !ec::is_a_regular_file(filename) {
+    if filename_given && !ec::path_exists(filename) {
+        println!("Will create new file named '{}' on write", filename);
+    }
+
+    if filename_given && ec::path_exists(filename) && !ec::is_a_regular_file(filename) {
         println!("{} isn't a regular file", filename);
         std::process::exit(1);
     }
