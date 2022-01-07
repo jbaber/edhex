@@ -64,6 +64,7 @@ o           Toggle using c(o)lor
 p           (p)rint current line of byte(s) (depending on 'W')
 R           Toggle (R)ead-only mode
 s           Print (s)tate of toggles, 'W'idth, etc.
+S           (S)ave state to a file (except the actual bytes you're editing)
 t3d         Print 0x3d lines of con(t)extual bytes after current line [Default 0]
 T3d         Print 0x3d lines of con(T)extual bytes before current line [Default 0]
 u           (u)pdate filename to write to
@@ -133,7 +134,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -657,6 +658,41 @@ pub fn update_filename(state: &mut ec::State) {
 }
 
 
+pub fn save_state(state: &ec::State) {
+    let filename = read_string_from_user(Some("Enter filename to save state: "));
+    if filename.is_err() {
+        println!("? {:?}", filename);
+        return;
+    }
+    let filename = filename.unwrap();
+
+    println!("Save bytes, too? (y/n): ");
+    let yeses = vec!["y", "Y", "Yes", "yes"];
+    let nos   = vec!["n", "N", "No",  "no"];
+    let save_bytes = loop {
+        let save_bytes_s = read_string_from_user(Some(""));
+        if save_bytes_s.is_err() {
+            println!("? {:?}", save_bytes_s);
+            return;
+        }
+        let save_bytes_s = save_bytes_s.unwrap();
+
+        if yeses.contains(&save_bytes_s.as_str()) {
+            break true;
+        }
+        if nos.contains(&save_bytes_s.as_str()) {
+            break false;
+        }
+        println!("Answer 'y' or 'n'\nSave bytes, too? (y/n): ");
+    };
+
+    let result = state.write_to_disk(&filename, save_bytes);
+    if result.is_err() {
+        println!("? {:?}", result);
+    }
+}
+
+
 pub fn write_out(state: &mut ec::State) {
     if state.readonly {
         println!("? Read-only mode");
@@ -976,6 +1012,11 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                         state.readonly = !state.readonly;
                     },
 
+
+                    /* Write state to a file */
+                    'S' => {
+                        save_state(&state);
+                    },
 
                     /* Print state */
                     's' => {
