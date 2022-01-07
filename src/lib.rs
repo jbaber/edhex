@@ -62,6 +62,7 @@ m           Toggle whether or not characters are printed after bytes
 n           Toggle whether or not byte (n)umbers are printed before bytes
 o           Toggle using c(o)lor
 p           (p)rint current line of byte(s) (depending on 'W')
+R           Toggle (R)ead-only mode
 s           Print (s)tate of toggles, 'W'idth, etc.
 t3d         Print 0x3d lines of con(t)extual bytes after current line [Default 0]
 T3d         Print 0x3d lines of con(T)extual bytes before current line [Default 0]
@@ -132,7 +133,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqsuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -968,6 +969,12 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                     'q' => {
                         return 0;
                     },
+
+                    /* Toggle readonly mode */
+                    'R' => {
+                        state.readonly = !state.readonly;
+                    },
+
 
                     /* Print state */
                     's' => {
