@@ -857,6 +857,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                         right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
                         state.all_bytes.append(&mut right_half);
                         state.index = command.range.0;
+                        state.unsaved_changes = true;
                         state.print_bytes();
                     },
 
