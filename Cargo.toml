@@ -1,6 +1,6 @@
 [package]
 name = "edhex"
-version = "0.3.6"
+version = "0.3.7"
 authors = ["John Baber-Lucero <cargo@frundle.com>"]
 license = "GPL-3.0"
 description = "Hex editor that works vaguely like ed"
