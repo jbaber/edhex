@@ -655,6 +655,9 @@ pub fn update_filename(state: &mut ec::State) {
     let filename = filename.unwrap();
 
     state.filename = filename;
+
+    /* Nothing's been written to that file yet, so */
+    state.unsaved_changes = true;
 }
 
 
@@ -1011,7 +1014,6 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                     'R' => {
                         state.readonly = !state.readonly;
                     },
-
 
                     /* Write state to a file */
                     'S' => {
