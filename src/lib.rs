@@ -380,7 +380,7 @@ impl Command {
         else if is_before_context {
             let caps = caps.unwrap();
             let given = caps.name("before_context").unwrap().as_str();
-            if let Ok(before_context) = usize::from_str_radix(given, state.radix) {
+            if let Ok(before_context) = usize::from_str_radix(given, state.prefs.radix) {
               Ok(Command{
                   range: (usize::from(before_context), usize::from(before_context)),
                   command: 'T',
@@ -395,7 +395,7 @@ impl Command {
         else if is_after_context {
             let caps = caps.unwrap();
             let given = caps.name("after_context").unwrap().as_str();
-            if let Ok(after_context) = usize::from_str_radix(given, state.radix) {
+            if let Ok(after_context) = usize::from_str_radix(given, state.prefs.radix) {
               Ok(Command{
                   range: (usize::from(after_context), usize::from(after_context)),
                   command: 't',
@@ -410,7 +410,7 @@ impl Command {
         else if is_width {
             // println!("is_width");
             let caps = caps.unwrap();
-            if let Some(width) = NonZeroUsize::new(usize::from_str_radix(caps.name("width").unwrap().as_str(), state.radix).unwrap()) {
+            if let Some(width) = NonZeroUsize::new(usize::from_str_radix(caps.name("width").unwrap().as_str(), state.prefs.radix).unwrap()) {
               Ok(Command{
                   range: (usize::from(width), usize::from(width)),
                   command: 'W',
@@ -437,7 +437,7 @@ impl Command {
             // println!("is_range");
             let caps = caps.unwrap();
             let begin = number_dot_dollar(state.index, _max_index,
-                    caps.name("begin").unwrap().as_str(), state.radix);
+                    caps.name("begin").unwrap().as_str(), state.prefs.radix);
             if begin.is_err() {
                 // Why on Earth doesn't this work?
                 // return Err(begin.unwrap());
@@ -445,7 +445,7 @@ impl Command {
             }
             let begin = begin.unwrap();
             let end = number_dot_dollar(state.index, _max_index,
-                    caps.name("end").unwrap().as_str(), state.radix);
+                    caps.name("end").unwrap().as_str(), state.prefs.radix);
             if end.is_err() {
                 // Why on Earth doesn't this work?
                 // return end;
@@ -481,7 +481,7 @@ impl Command {
             // println!("is_specified_index");
             let caps = caps.unwrap();
             let specific_index = number_dot_dollar(state.index, _max_index,
-                    caps.name("index").unwrap().as_str(), state.radix);
+                    caps.name("index").unwrap().as_str(), state.prefs.radix);
             if specific_index.is_err() {
                 // Why on Earth doesn't this work?
                 // return specific_index;
@@ -518,7 +518,7 @@ impl Command {
             // println!("is_specified_index");
             let caps = caps.unwrap();
             let as_string = caps.name("offset").unwrap().as_str();
-            let index_offset = usize::from_str_radix(as_string, state.radix);
+            let index_offset = usize::from_str_radix(as_string, state.prefs.radix);
             if index_offset.is_err() {
                 return Err(format!("{} is not a number", as_string));
             }
@@ -777,19 +777,23 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
         -> i32 {
 
     // TODO Below here should be a function called main_loop()
-    let mut state = ec::State{
-        radix: 16,
-        filename: filename.to_owned(),
-        show_byte_numbers: true,
-        show_prompt: !quiet,
-        color: color,
-        show_chars: true,
+    let mut state = ec::State {
+        prefs: ec::Preferences {
+            radix: 16,
+            show_byte_numbers: true,
+            show_prompt: !quiet,
+            color: color,
+            show_chars: true,
+            before_context: 0,
+            after_context: 0,
+            width: NonZeroUsize::new(16).unwrap(),
+            // TODO calculate based on longest possible index
+            n_padding: "      ".to_owned(),
+        },
         unsaved_changes: (filename == ""),
+        filename: filename.to_owned(),
         readonly: readonly,
         index: 0,
-        before_context: 0,
-        after_context: 0,
-        width: NonZeroUsize::new(16).unwrap(),
         all_bytes: if filename == "" {
                 Vec::new()
             }
@@ -815,8 +819,6 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                 }
             }
         ,
-        // TODO calculate based on longest possible index
-        n_padding: "      ".to_owned(),
         last_search: None,
     };
 
@@ -828,7 +830,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
     }
 
     loop {
-        if state.show_prompt {
+        if state.prefs.show_prompt {
             print!("*");
         }
         io::stdout().flush().unwrap();
@@ -928,7 +930,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                             continue;
                         };
 
-                        let width = usize::from(state.width);
+                        let width = usize::from(state.prefs.width);
                         let first_byte_to_show_index =
                                 state.index.saturating_sub(width);
                         state.index = first_byte_to_show_index;
@@ -979,32 +981,32 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
 
                     /* Toggle showing char representations of bytes */
                     'm' => {
-                        state.show_chars = !state.show_chars;
+                        state.prefs.show_chars = !state.prefs.show_chars;
                         if !quiet {
-                            println!("{}", state.show_chars);
+                            println!("{}", state.prefs.show_chars);
                         }
                     },
 
                     /* Toggle showing byte number */
                     'n' => {
-                        state.show_byte_numbers = !state.show_byte_numbers;
+                        state.prefs.show_byte_numbers = !state.prefs.show_byte_numbers;
                         if !quiet {
-                            println!("{}", state.show_byte_numbers);
+                            println!("{}", state.prefs.show_byte_numbers);
                         }
                     },
 
                     /* Toggle color */
                     'o' => {
-                        state.color = !state.color;
+                        state.prefs.color = !state.prefs.color;
                         if !quiet {
-                            println!("{}", state.color);
+                            println!("{}", state.prefs.color);
                         }
                     },
 
 
                     /* Toggle hex/dec */
                     'x' => {
-                        state.radix = if state.radix == 16 {
+                        state.prefs.radix = if state.prefs.radix == 16 {
                             10
                         }
                         else {
@@ -1021,7 +1023,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
 
                         match state.max_index() {
                             Ok(max) => {
-                                let width = usize::from(state.width);
+                                let width = usize::from(state.prefs.width);
                                 let first_byte_to_show_index = state.index + width;
                                 let last_byte_to_show_index = min(
                                         first_byte_to_show_index + width - 1,
@@ -1029,7 +1031,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                                 if first_byte_to_show_index > max {
                                     println!("? (already showing last byte at index {})",
                                             hex_unless_dec(last_byte_to_show_index,
-                                                    state.radix));
+                                                    state.prefs.radix));
                                 }
                                 else {
                                     state.index = first_byte_to_show_index;
@@ -1104,12 +1106,12 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
 
                     /* Change after_context */
                     't' => {
-                        state.after_context = usize::from(command.range.0);
+                        state.prefs.after_context = usize::from(command.range.0);
                     },
 
                     /* Change before_context */
                     'T' => {
-                        state.before_context = usize::from(command.range.0);
+                        state.prefs.before_context = usize::from(command.range.0);
                     },
 
                     /* (u)pdate iflename */
@@ -1125,7 +1127,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                     /* Change width */
                     'W' => {
                         if let Some(width) = NonZeroUsize::new(command.range.0) {
-                            state.width = width;
+                            state.prefs.width = width;
                         }
                     },
 

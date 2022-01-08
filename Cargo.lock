@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "edhex_core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "ansi_term",
  "regex",
