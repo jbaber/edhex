@@ -64,7 +64,7 @@ o           Toggle using c(o)lor
 p           (p)rint current line of byte(s) (depending on 'W')
 R           Toggle (R)ead-only mode
 s           Print (s)tate of toggles, 'W'idth, etc.
-S           (S)ave state to a file (except the actual bytes you're editing)
+S           (S)ave state to a file except the bytes you're editing.
 t3d         Print 0x3d lines of con(t)extual bytes after current line [Default 0]
 T3d         Print 0x3d lines of con(T)extual bytes before current line [Default 0]
 u           (u)pdate filename to write to
@@ -663,35 +663,13 @@ pub fn update_filename(state: &mut ec::State) {
 
 pub fn save_state(state: &ec::State) {
     let filename = read_string_from_user(Some("Enter filename to save state: "));
-    if filename.is_err() {
-        println!("? {:?}", filename);
-        return;
+    if filename.is_ok() {
+        if let Err(error) = state.write_to_disk(&filename.unwrap()) {
+            println!("? {:?}", error);
+        }
     }
-    let filename = filename.unwrap();
-
-    println!("Save bytes, too? (y/n): ");
-    let yeses = vec!["y", "Y", "Yes", "yes"];
-    let nos   = vec!["n", "N", "No",  "no"];
-    let save_bytes = loop {
-        let save_bytes_s = read_string_from_user(Some(""));
-        if save_bytes_s.is_err() {
-            println!("? {:?}", save_bytes_s);
-            return;
-        }
-        let save_bytes_s = save_bytes_s.unwrap();
-
-        if yeses.contains(&save_bytes_s.as_str()) {
-            break true;
-        }
-        if nos.contains(&save_bytes_s.as_str()) {
-            break false;
-        }
-        println!("Answer 'y' or 'n'\nSave bytes, too? (y/n): ");
-    };
-
-    let result = state.write_to_disk(&filename, save_bytes);
-    if result.is_err() {
-        println!("? {:?}", result);
+    else {
+        println!("? {:?}", filename);
     }
 }
 
