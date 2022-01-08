@@ -735,11 +735,24 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
             }
             else {
                 let maybe_all_bytes = ec::all_bytes_from_filename(filename);
-                if maybe_all_bytes.is_err() {
-                    println!("{:?}", maybe_all_bytes);
-                    return 1;
+                if maybe_all_bytes.is_ok() {
+                    maybe_all_bytes.unwrap()
                 }
-                maybe_all_bytes.unwrap()
+                else {
+                    match maybe_all_bytes {
+                        Err(ec::AllBytesFromFilenameError::NotARegularFile) => {
+                            println!("{} is not a regular file", filename);
+                            return 1;
+                        },
+                        Err(ec::AllBytesFromFilenameError::FileDoesNotExist) => {
+                            Vec::new()
+                        },
+                        _ => {
+                            println!("Cannot read {}", filename);
+                            return 1;
+                        }
+                    }
+                }
             }
         ,
         // TODO calculate based on longest possible index
