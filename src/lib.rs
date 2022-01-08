@@ -58,6 +58,7 @@ i           Prompt you to enter bytes which will be (i)nserted at current index
 /deadbeef/i If bytes de ad be ef exist after current index, move there
               and prompt you to enter bytes which will be (i)nserted there
 12,3dp      (p)rint bytes 12 - 3d inclusive, move to byte 12
+L           (L)oad state from a file.  Fails if file you were editing is gone.
 m           Toggle whether or not characters are printed after bytes
 n           Toggle whether or not byte (n)umbers are printed before bytes
 o           Toggle using c(o)lor
@@ -134,7 +135,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSLuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -876,6 +877,25 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                         state.index = command.range.0;
                         state.unsaved_changes = true;
                         state.print_bytes();
+                    },
+
+                    /* Load state from a file */
+                    'L' => {
+                        let filename =
+                                read_string_from_user(Some(
+                                        "Enter filename from which to load state: "));
+                        if filename.is_ok() {
+                            let new_state = State::from_filename(&filename.unwrap());
+                            if new_state.is_ok() {
+                                state = new_state.unwrap();
+                            }
+                            else {
+                                println!("? {:?}", new_state);
+                            }
+                        }
+                        else {
+                            println!("? {:?}", filename);
+                        }
                     },
 
                     /* Toggle showing char representations of bytes */
