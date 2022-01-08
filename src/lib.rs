@@ -58,6 +58,7 @@ i           Prompt you to enter bytes which will be (i)nserted at current index
 /deadbeef/i If bytes de ad be ef exist after current index, move there
               and prompt you to enter bytes which will be (i)nserted there
 12,3dp      (p)rint bytes 12 - 3d inclusive, move to byte 12
+l           (l)oad a new file.
 L           (L)oad state from a file.  Fails if file you were editing is gone.
 m           Toggle whether or not characters are printed after bytes
 n           Toggle whether or not byte (n)umbers are printed before bytes
@@ -135,7 +136,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSLuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSlLuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -662,6 +663,65 @@ pub fn update_filename(state: &mut ec::State) {
 }
 
 
+pub fn load_new_file(state: &mut ec::State) {
+	if state.unsaved_changes {
+		let unsaved_prompt = "You have unsaved changes.  Carry on? (y/n): ";
+		println!("{}", unsaved_prompt);
+		let yeses = vec!["y", "Y", "Yes", "yes"];
+		let nos   = vec!["n", "N", "No",  "no"];
+		let carry_on = loop {
+			let carry_on_s = read_string_from_user(Some(""));
+			if carry_on_s.is_err() {
+				println!("? {:?}", carry_on_s);
+				return;
+			}
+			let carry_on_s = carry_on_s.unwrap();
+
+			if yeses.contains(&carry_on_s.as_str()) {
+				break true;
+			}
+			if nos.contains(&carry_on_s.as_str()) {
+				break false;
+			}
+			println!("{}", unsaved_prompt);
+		};
+		if !carry_on {
+			return;
+		}
+	}
+
+    let filename =
+            read_string_from_user(Some(
+                    "Enter filename from which to load bytes: "));
+    if filename.is_err() {
+        println!("? {:?}", filename);
+        return;
+    }
+    let filename = filename.unwrap();
+
+    let maybe_all_bytes =
+            ec::all_bytes_from_filename(&filename);
+    if maybe_all_bytes.is_ok() {
+        state.filename = filename;
+        state.all_bytes = maybe_all_bytes.unwrap();
+        return;
+    }
+
+    match maybe_all_bytes {
+        Err(ec::AllBytesFromFilenameError::NotARegularFile) => {
+            println!("? {} is not a regular file", filename);
+        },
+        Err(ec::AllBytesFromFilenameError::FileDoesNotExist) => {
+            println!("? {} does not exist", filename);
+            println!("Use 'u' to just change filename");
+        },
+        _ => {
+            println!("? {:?}", maybe_all_bytes);
+        },
+    }
+}
+
+
 pub fn save_state(state: &ec::State) {
     let filename = read_string_from_user(Some("Enter filename to save state: "));
     if filename.is_ok() {
@@ -891,6 +951,12 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                         state.unsaved_changes = true;
                         state.print_bytes();
                     },
+
+
+                    /* Load new file */
+                    'l' => {
+                        load_new_file(&mut state);
+                    }
 
                     /* Load state from a file */
                     'L' => {

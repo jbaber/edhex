@@ -1,9 +1,2 @@
 - Handle things like "$-10"
 - docs.rs documentation
-- Allow saving of state
-  - use serde_json by implementing serialize on State
-  - Don't save all_bytes
-    - prompt when unsaved_changes
-    - warn in help text that the actual bytes aren't saved 
-      in the state
-      - *maybe* offer to save the actual bytes, too
