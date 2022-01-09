@@ -2,6 +2,7 @@ use ec::hex_unless_dec;
 use ec::State;
 use regex::Regex;
 use std::cmp::min;
+use std::fs;
 use std::io;
 use std::io::Write;
 use std::num::NonZeroUsize;
@@ -64,6 +65,7 @@ m           Toggle whether or not characters are printed after bytes
 n           Toggle whether or not byte (n)umbers are printed before bytes
 o           Toggle using c(o)lor
 p           (p)rint current line of byte(s) (depending on 'W')
+P           Save (P)references to file (width, color, etc.)
 R           Toggle (R)ead-only mode
 s           Print (s)tate of toggles, 'W'idth, etc.
 S           (S)ave state to a file except the bytes you're editing.
@@ -136,7 +138,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSlLuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSlLPuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -504,7 +506,7 @@ impl Command {
                     range: (specific_index, specific_index),
                     command:
                         if command == 'p' {
-                            'P'
+                            '☃'
                         }
                         else {
                           command
@@ -663,6 +665,24 @@ pub fn update_filename(state: &mut ec::State) {
 }
 
 
+pub fn load_state_from_file(state: &mut ec::State) {
+    let filename = read_string_from_user(Some(
+                    "Enter filename from which to load state: "));
+    if filename.is_ok() {
+        let new_state = State::from_filename(&filename.unwrap());
+        if new_state.is_ok() {
+            *state = new_state.unwrap();
+        }
+        else {
+            println!("? {:?}", new_state);
+        }
+    }
+    else {
+        println!("? {:?}", filename);
+    }
+}
+
+
 pub fn load_new_file(state: &mut ec::State) {
 	if state.unsaved_changes {
 		let unsaved_prompt = "You have unsaved changes.  Carry on? (y/n): ";
@@ -718,6 +738,44 @@ pub fn load_new_file(state: &mut ec::State) {
         _ => {
             println!("? {:?}", maybe_all_bytes);
         },
+    }
+}
+
+
+pub fn save_prefs(state: &ec::State) {
+    let pref_path = ec::preferences_file_path();
+    let filename = read_string_from_user(Some(&format!(
+            "Enter filename to save preferences [{}]: ",
+                    pref_path.display())));
+    if filename.is_ok() {
+        let mut filename = filename.unwrap();
+        if filename == "" {
+            if let Some(pref_path_s) = pref_path.to_str() {
+                filename = pref_path_s.to_owned();
+
+                /* In the default case, we're brave enough to create
+                 * the parent directory for the file if it's not root */
+                if let Some(parent_dir) = pref_path.parent() {
+                    if let Err(error) = fs::create_dir_all(parent_dir) {
+                        println!("? Couldn't create directory {} ({:?})",
+                                parent_dir.display(), error);
+                    }
+                }
+            }
+            else {
+                println!("? Default path ({}) is not valid unicode.",
+                        pref_path.display());
+                return;
+            }
+        }
+
+        let result = state.prefs.write_to_disk(&filename);
+        if let Err(error) = result {
+            println!("? {:?}", error);
+        }
+    }
+    else {
+        println!("? {:?}", filename);
     }
 }
 
@@ -962,21 +1020,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
 
                     /* Load state from a file */
                     'L' => {
-                        let filename =
-                                read_string_from_user(Some(
-                                        "Enter filename from which to load state: "));
-                        if filename.is_ok() {
-                            let new_state = State::from_filename(&filename.unwrap());
-                            if new_state.is_ok() {
-                                state = new_state.unwrap();
-                            }
-                            else {
-                                println!("? {:?}", new_state);
-                            }
-                        }
-                        else {
-                            println!("? {:?}", filename);
-                        }
+                        load_state_from_file(&mut state);
                     },
 
                     /* Toggle showing char representations of bytes */
@@ -1045,7 +1089,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                     }
 
                     /* Print byte(s) at one place, width long */
-                    'P' => {
+                    '☃' => {
                         if state.empty() {
                             println!("? (Empty file)");
                             continue;
@@ -1073,6 +1117,12 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                             println!("? (bad range {:?}", command.range);
                         }
                     },
+
+                    /* Save preferences to a file */
+                    'P' => {
+                        save_prefs(&state);
+                    },
+
 
                     /* Print byte(s) at *current* place, width long */
                     'Q' => {
