@@ -66,6 +66,7 @@ n           Toggle whether or not byte (n)umbers are printed before bytes
 o           Toggle using c(o)lor
 p           (p)rint current line of byte(s) (depending on 'W')
 P           Save (P)references to file (width, color, etc.)
+r           (r)ead preferences from a file.
 R           Toggle (R)ead-only mode
 s           Print (s)tate of toggles, 'W'idth, etc.
 S           (S)ave state to a file except the bytes you're editing.
@@ -138,7 +139,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRsSlLPuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRrsSlLPuwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -742,6 +743,38 @@ pub fn load_new_file(state: &mut ec::State) {
 }
 
 
+pub fn load_prefs(state: &mut ec::State) {
+    let pref_path = ec::preferences_file_path();
+    let filename = read_string_from_user(Some(&format!(
+            "Enter filename from which to load preferences [{}]: ",
+                    pref_path.display())));
+    if filename.is_ok() {
+        let mut filename = filename.unwrap();
+        if filename == "" {
+            if let Some(pref_path_s) = pref_path.to_str() {
+                filename = pref_path_s.to_owned();
+            }
+            else {
+                println!("? Default path ({}) is not valid unicode.",
+                        pref_path.display());
+                return;
+            }
+        }
+
+        let result = ec::Preferences::read_from_disk(&filename);
+        if result.is_ok() {
+            state.prefs = result.unwrap();
+        }
+        else {
+            println!("? {:?}", result);
+        }
+    }
+    else {
+        println!("? {:?}", filename);
+    }
+}
+
+
 pub fn save_prefs(state: &ec::State) {
     let pref_path = ec::preferences_file_path();
     let filename = read_string_from_user(Some(&format!(
@@ -1123,6 +1156,11 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                         save_prefs(&state);
                     },
 
+
+                    /* Load preferences from a file */
+                    'r' => {
+                        load_prefs(&mut state);
+                    },
 
                     /* Print byte(s) at *current* place, width long */
                     'Q' => {
