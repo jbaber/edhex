@@ -761,7 +761,7 @@ pub fn load_prefs(state: &mut ec::State) {
             }
         }
 
-        let result = ec::Preferences::read_from_disk(&filename);
+        let result = ec::Preferences::read_from_filename(&filename);
         if result.is_ok() {
             state.prefs = result.unwrap();
         }
@@ -867,9 +867,14 @@ pub fn write_out(state: &mut ec::State) {
 pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
         -> i32 {
 
-    // TODO Below here should be a function called main_loop()
-    let mut state = ec::State {
-        prefs: ec::Preferences {
+    /* Use a config file if one is present */
+    let maybe_prefs = ec::Preferences::read_from_path(&ec::preferences_file_path());
+    // TODO Do this with some .or_else trickery
+    let prefs = if maybe_prefs.is_ok() {
+        maybe_prefs.unwrap()
+    }
+    else {
+        ec::Preferences {
             radix: 16,
             show_byte_numbers: true,
             show_prompt: !quiet,
@@ -880,7 +885,12 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
             width: NonZeroUsize::new(16).unwrap(),
             // TODO calculate based on longest possible index
             n_padding: "      ".to_owned(),
-        },
+        }
+    };
+
+    // TODO Below here should be a function called main_loop()
+    let mut state = ec::State {
+        prefs: prefs,
         unsaved_changes: (filename == ""),
         filename: filename.to_owned(),
         readonly: readonly,

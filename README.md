@@ -19,3 +19,9 @@ Differences from ed
 - There's a width setting `W` for printing out.
 - Byte numbers start from 0.
 - a, b, c, d, e, f can't be commands because they could be numbers.
+
+Preferences
+-----------
+If you choose to save (P)references to [$XDG_CONFIG_HOME or $HOME/.config/edhex/preferences], they will be automatically be loaded on startup.
+
+[$XDG_CONFIG_HOME or $HOME/.config/edhex/preferences]: https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
