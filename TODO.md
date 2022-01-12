@@ -3,5 +3,5 @@
 - Implement printing only a screenful at a time (real ed doesn't bother to do this)
 - Save preferences as distinct from saving state
   - Load from preferences in $XDG_CONFIG_HOME/edhex/preferences if they exist
-    - If not provided, should be in $HOME/.config per the XDG Basedir specification
-      https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+  - Give CLI a flag for alternative location for preferences file
+- Give CLI flag for a state file.

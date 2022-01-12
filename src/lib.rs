@@ -1076,7 +1076,12 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
                     'o' => {
                         state.prefs.color = !state.prefs.color;
                         if !quiet {
-                            println!("{}", state.prefs.color);
+                            if state.prefs.color {
+                                println!("{} mode on", state.pretty_color_state());
+                            }
+                            else {
+                                println!("No color mode");
+                            }
                         }
                     },
 
