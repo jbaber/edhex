@@ -5,3 +5,4 @@
   - Load from preferences in $XDG_CONFIG_HOME/edhex/preferences if they exist
   - Give CLI a flag for alternative location for preferences file
 - Give CLI flag for a state file.
+- When a line isn't complete, the chars come too early.  Fix this.
