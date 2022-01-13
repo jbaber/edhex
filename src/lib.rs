@@ -6,6 +6,7 @@ use std::fs;
 use std::io;
 use std::io::Write;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 
 // TODO This is deprecated and should be
 // replaced with
@@ -864,11 +865,11 @@ pub fn write_out(state: &mut ec::State) {
 
 
 /// If `filename` is "", open an empty buffer
-pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool)
-        -> i32 {
+pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
+        prefs_path: PathBuf) -> i32 {
 
     /* Use a config file if one is present */
-    let maybe_prefs = ec::Preferences::read_from_path(&ec::preferences_file_path());
+    let maybe_prefs = ec::Preferences::read_from_path(&prefs_path);
     // TODO Do this with some .or_else trickery
     let prefs = if maybe_prefs.is_ok() {
         maybe_prefs.unwrap()

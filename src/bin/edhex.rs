@@ -6,6 +6,7 @@
 extern crate edhex_core as ec;
 extern crate clap;
 use clap::{Arg, App};
+use std::path::Path;
 
 
 fn main() {
@@ -22,6 +23,8 @@ fn main() {
     let about = "A hex editor that works vaguely like ed.\nIt can read \
             interactively from the user or read commands from STDIN.";
 
+    let default_prefs_path = ec::preferences_file_path();
+    let default_prefs_path_s = format!("{}", default_prefs_path.display());
     let matches = App::new(called_name)
         .version(version.as_str())
         .about(about)
@@ -31,6 +34,12 @@ fn main() {
         .arg(Arg::with_name("readonly").short("R").long("read-only")
                 .takes_value(false).help("Read-only mode.  Don't let you \
                         write changes to disk."))
+        // .default_value is not flexible enough
+        .arg(Arg::with_name("prefs-filename.json").short("p").long("preferences")
+                .takes_value(true)
+                .help(&format!("Load preferences from <prefs-filename{}{}{}",
+                        ".json>\n[DEFAULT: ", default_prefs_path_s, "]"))
+        )
         .arg(Arg::with_name("quiet").short("q").long("quiet")
                 .takes_value(false).help("Don't print prompts or initial \
                         help text and state\ne.g. for clean output when \
@@ -48,6 +57,10 @@ fn main() {
         Some(filename) => filename,
     };
     let readonly = matches.is_present("readonly");
+    let prefs_path = match matches.value_of("prefs-filename.json") {
+        Some(path_s) => Path::new(path_s).to_path_buf(),
+        None => default_prefs_path,
+    };
 
     if !filename_given {
         println!("No filename provided\nOpening empty buffer");
@@ -62,5 +75,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    std::process::exit(edhex::actual_runtime(&filename, quiet, color, readonly))
+    std::process::exit(edhex::actual_runtime(&filename, quiet, color, readonly,
+            prefs_path.to_path_buf()))
 }
