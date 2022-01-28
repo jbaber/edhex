@@ -25,6 +25,8 @@ fn main() {
 
     let default_prefs_path = ec::preferences_file_path();
     let default_prefs_path_s = format!("{}", default_prefs_path.display());
+    let default_state_path = ec::state_file_path();
+    let default_state_path_s = format!("{}", default_state_path.display());
     let matches = App::new(called_name)
         .version(version.as_str())
         .about(about)
@@ -39,6 +41,15 @@ fn main() {
                 .takes_value(true)
                 .help(&format!("Load preferences from <prefs-filename{}{}{}",
                         ".json>\n[DEFAULT: ", default_prefs_path_s, "]"))
+        )
+        // .default_value is not flexible enough
+        .arg(Arg::with_name("state-filename.json").short("s").long("state")
+                .takes_value(true)
+                .help(&format!("Load state from <state-filename{}{}{}{}{}",
+                        ".json>\nAny file named ", default_state_path_s,
+                        " will be automatically loaded.\n",
+                        "If given -p, those preferences will take precedence\n",
+                        "over preferences in <state-filename.json>"))
         )
         .arg(Arg::with_name("quiet").short("q").long("quiet")
                 .takes_value(false).help("Don't print prompts or initial \
@@ -61,6 +72,11 @@ fn main() {
         Some(path_s) => Path::new(path_s).to_path_buf(),
         None => default_prefs_path,
     };
+    let state_path = match matches.value_of("state-filename.json") {
+        Some(path_s) => Path::new(path_s).to_path_buf(),
+        None => default_state_path,
+    };
+
 
     if !filename_given {
         println!("No filename provided\nOpening empty buffer");
@@ -76,5 +92,5 @@ fn main() {
     }
 
     std::process::exit(edhex::actual_runtime(&filename, quiet, color, readonly,
-            prefs_path.to_path_buf()))
+            prefs_path.to_path_buf(), state_path.to_path_buf()))
 }

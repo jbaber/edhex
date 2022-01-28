@@ -2,7 +2,6 @@ use ec::hex_unless_dec;
 use ec::State;
 use regex::Regex;
 use std::cmp::min;
-use std::fs;
 use std::io;
 use std::io::Write;
 use std::num::NonZeroUsize;
@@ -81,38 +80,10 @@ q           (q)uit
 ");
 }
 
-
-fn read_string_from_user(prompt: Option<&str>) -> Result<String, String> {
-    print!("{}", if prompt.is_none() {
-            "> "
-        }
-        else {
-            prompt.unwrap()
-        }
-    );
-
-    io::stdout().flush().unwrap();
-    let result = get_input_or_die();
-
-    if result.is_ok() {
-        Ok(result.unwrap())
-    }
-
-    /* Consider EOF empty string */
-    else if result == Err(0) {
-        Ok("".to_owned())
-    }
-
-    else {
-        Err("Couldn't read input from user".to_owned())
-    }
-}
-
-
 fn read_bytes_from_user() -> Result<Vec<u8>, String> {
     print!("> ");
     io::stdout().flush().unwrap();
-    let input = match get_input_or_die() {
+    let input = match ec::get_input_or_die() {
         Ok(input) => input,
         Err(_errcode) => {
             return Err("Couldn't read input".to_owned());
@@ -560,27 +531,6 @@ impl Command {
 }
 
 
-fn get_input_or_die() -> Result<String, i32> {
-    let mut input = String::new();
-    match io::stdin().read_line(&mut input) {
-        Ok(_num_bytes) => {
-
-            /* EOF Return error of 0 to indicate time for a clean exit.  */
-            if _num_bytes == 0 {
-                Err(0)
-            }
-            else {
-                Ok(input.trim().to_string())
-            }
-        }
-        Err(_) => {
-            println!("Unable to read input");
-            Err(3)
-        }
-    }
-}
-
-
 fn number_dot_dollar(index:usize, _max_index:usize, input:&str, radix:u32)
         -> Result<usize, String> {
     match input {
@@ -653,7 +603,7 @@ pub fn cargo_version() -> Result<String, String> {
 
 
 pub fn update_filename(state: &mut ec::State) {
-    let filename = read_string_from_user(Some("Enter new filename: "));
+    let filename = ec::read_string_from_user(Some("Enter new filename: "));
     if filename.is_err() {
         println!("? {:?}", filename);
         return;
@@ -668,10 +618,10 @@ pub fn update_filename(state: &mut ec::State) {
 
 
 pub fn load_state_from_file(state: &mut ec::State) {
-    let filename = read_string_from_user(Some(
+    let filename = ec::read_string_from_user(Some(
                     "Enter filename from which to load state: "));
     if filename.is_ok() {
-        let new_state = State::from_filename(&filename.unwrap());
+        let new_state = State::read_from_filename(&filename.unwrap());
         if new_state.is_ok() {
             *state = new_state.unwrap();
         }
@@ -692,7 +642,7 @@ pub fn load_new_file(state: &mut ec::State) {
 		let yeses = vec!["y", "Y", "Yes", "yes"];
 		let nos   = vec!["n", "N", "No",  "no"];
 		let carry_on = loop {
-			let carry_on_s = read_string_from_user(Some(""));
+			let carry_on_s = ec::read_string_from_user(Some(""));
 			if carry_on_s.is_err() {
 				println!("? {:?}", carry_on_s);
 				return;
@@ -712,9 +662,8 @@ pub fn load_new_file(state: &mut ec::State) {
 		}
 	}
 
-    let filename =
-            read_string_from_user(Some(
-                    "Enter filename from which to load bytes: "));
+    let filename = ec::read_string_from_user(Some(
+            "Enter filename from which to load bytes: "));
     if filename.is_err() {
         println!("? {:?}", filename);
         return;
@@ -746,7 +695,7 @@ pub fn load_new_file(state: &mut ec::State) {
 
 pub fn load_prefs(state: &mut ec::State) {
     let pref_path = ec::preferences_file_path();
-    let filename = read_string_from_user(Some(&format!(
+    let filename = ec::read_string_from_user(Some(&format!(
             "Enter filename from which to load preferences [{}]: ",
                     pref_path.display())));
     if filename.is_ok() {
@@ -776,57 +725,6 @@ pub fn load_prefs(state: &mut ec::State) {
 }
 
 
-pub fn save_prefs(state: &ec::State) {
-    let pref_path = ec::preferences_file_path();
-    let filename = read_string_from_user(Some(&format!(
-            "Enter filename to save preferences [{}]: ",
-                    pref_path.display())));
-    if filename.is_ok() {
-        let mut filename = filename.unwrap();
-        if filename == "" {
-            if let Some(pref_path_s) = pref_path.to_str() {
-                filename = pref_path_s.to_owned();
-
-                /* In the default case, we're brave enough to create
-                 * the parent directory for the file if it's not root */
-                if let Some(parent_dir) = pref_path.parent() {
-                    if let Err(error) = fs::create_dir_all(parent_dir) {
-                        println!("? Couldn't create directory {} ({:?})",
-                                parent_dir.display(), error);
-                    }
-                }
-            }
-            else {
-                println!("? Default path ({}) is not valid unicode.",
-                        pref_path.display());
-                return;
-            }
-        }
-
-        let result = state.prefs.write_to_disk(&filename);
-        if let Err(error) = result {
-            println!("? {:?}", error);
-        }
-    }
-    else {
-        println!("? {:?}", filename);
-    }
-}
-
-
-pub fn save_state(state: &ec::State) {
-    let filename = read_string_from_user(Some("Enter filename to save state: "));
-    if filename.is_ok() {
-        if let Err(error) = state.write_to_disk(&filename.unwrap()) {
-            println!("? {:?}", error);
-        }
-    }
-    else {
-        println!("? {:?}", filename);
-    }
-}
-
-
 pub fn write_out(state: &mut ec::State) {
     if state.readonly {
         println!("? Read-only mode");
@@ -842,7 +740,7 @@ pub fn write_out(state: &mut ec::State) {
         }
     }
     else {
-        let filename = read_string_from_user(Some("Enter filename: "));
+        let filename = ec::read_string_from_user(Some("Enter filename: "));
         if filename.is_err() {
             println!("? {:?}", filename);
             return;
@@ -866,37 +764,33 @@ pub fn write_out(state: &mut ec::State) {
 
 /// If `filename` is "", open an empty buffer
 pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
-        prefs_path: PathBuf) -> i32 {
-
-    /* Use a config file if one is present */
-    let maybe_prefs = ec::Preferences::read_from_path(&prefs_path);
-    // TODO Do this with some .or_else trickery
-    let prefs = if maybe_prefs.is_ok() {
-        maybe_prefs.unwrap()
-    }
-    else {
-        ec::Preferences {
-            radix: 16,
-            show_byte_numbers: true,
-            show_prompt: !quiet,
-            color: color,
-            show_chars: true,
-            before_context: 0,
-            after_context: 0,
-            width: NonZeroUsize::new(16).unwrap(),
-            // TODO calculate based on longest possible index
-            n_padding: "      ".to_owned(),
-        }
+        prefs_path: PathBuf, state_path: PathBuf) -> i32 {
+    let default_prefs = ec::Preferences {
+        radix: 16,
+        show_byte_numbers: true,
+        show_prompt: !quiet,
+        color: color,
+        show_chars: true,
+        before_context: 0,
+        after_context: 0,
+        width: NonZeroUsize::new(16).unwrap(),
+        // TODO calculate based on longest possible index
+        n_padding: "      ".to_owned(),
     };
 
-    // TODO Below here should be a function called main_loop()
-    let mut state = ec::State {
-        prefs: prefs,
-        unsaved_changes: (filename == ""),
-        filename: filename.to_owned(),
-        readonly: readonly,
-        index: 0,
-        all_bytes: if filename == "" {
+    /* Use a state file if one is present */
+    let maybe_state = ec::State::read_from_path(&state_path);
+    let mut state = if maybe_state.is_ok() {
+        maybe_state.unwrap()
+    }
+    else {
+        ec::State {
+            prefs: default_prefs,
+            unsaved_changes: (filename == ""),
+            filename: filename.to_owned(),
+            readonly: readonly,
+            index: 0,
+            all_bytes: if filename == "" {
                 Vec::new()
             }
             else {
@@ -919,10 +813,15 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
                         }
                     }
                 }
-            }
-        ,
-        last_search: None,
+            },
+            last_search: None,
+        }
     };
+
+    /* Use a config file if one is present */
+    if let Ok(prefs) = ec::Preferences::read_from_path(&prefs_path) {
+        state.prefs = prefs;
+    }
 
     if !quiet {
         println!("h for help\n");
@@ -931,12 +830,13 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
         state.print_bytes_sans_context(state.range(), false);
     }
 
+    // TODO Below here should be a function called main_loop()
     loop {
         if state.prefs.show_prompt {
             print!("*");
         }
         io::stdout().flush().unwrap();
-        let input = match get_input_or_die() {
+        let input = match ec::get_input_or_die() {
             Ok(input) => input,
             Err(errcode) => {
                 return errcode;
@@ -1169,7 +1069,9 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
 
                     /* Save preferences to a file */
                     'P' => {
-                        save_prefs(&state);
+                        ec::save_to_path_or_default(&(state.prefs),
+                                "Enter filename to save preferences",
+                                ec::preferences_file_path());
                     },
 
 
@@ -1200,7 +1102,9 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
 
                     /* Write state to a file */
                     'S' => {
-                        save_state(&state);
+                        ec::save_to_path_or_default(&state,
+                                "Enter filename to save state",
+                                ec::state_file_path());
                     },
 
                     /* Print state */
