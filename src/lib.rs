@@ -766,16 +766,9 @@ pub fn write_out(state: &mut ec::State) {
 pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
         prefs_path: PathBuf, state_path: PathBuf) -> i32 {
     let default_prefs = ec::Preferences {
-        radix: 16,
-        show_byte_numbers: true,
         show_prompt: !quiet,
         color: color,
-        show_chars: true,
-        before_context: 0,
-        after_context: 0,
-        width: NonZeroUsize::new(16).unwrap(),
-        // TODO calculate based on longest possible index
-        n_padding: "      ".to_owned(),
+        ..ec::Preferences::default()
     };
 
     /* Use a state file if one is present */
