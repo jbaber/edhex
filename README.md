@@ -9,7 +9,7 @@ Usage
 -----
 
     edhex <filename>
-    echo '0,$' |edhex -q <filename>
+    echo '0,$p' |edhex -P <filename> |less -R
 
 Differences from ed
 -------------------

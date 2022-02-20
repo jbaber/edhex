@@ -823,7 +823,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
         println!("{}", Color::Yellow.paint("h for help"));
         println!("\n{}", state);
         println!();
-        state.print_bytes_sans_context(state.range(), false);
+        state.print_bytes();
     }
 
     // TODO Below here should be a function called main_loop()

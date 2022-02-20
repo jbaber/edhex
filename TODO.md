@@ -1,6 +1,5 @@
 - BUG
   - ? past the beginning of the file causes a panic
-  - Show context even on first print when opening file
 
 - Handle things like "$-10"
 - docs.rs documentation
