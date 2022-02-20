@@ -255,7 +255,7 @@ impl Command {
                 &state.all_bytes[(state.index + 1)..]
             }
             else {
-                &state.all_bytes[..(state.index - 1)]
+                &state.all_bytes[..(state.index.saturating_sub(1))]
             };
 
             if let Some(offset) = ec::index_of_bytes(&needle, haystack, forward) {

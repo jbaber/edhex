@@ -1,6 +1,3 @@
-- BUG
-  - ? past the beginning of the file causes a panic
-
 - Handle things like "$-10"
 - docs.rs documentation
 - Implement printing only a screenful at a time (real ed doesn't bother to do this)
