@@ -1,3 +1,4 @@
+use ansi_term::Color;
 use ec::hex_unless_dec;
 use ec::State;
 use regex::Regex;
@@ -763,11 +764,13 @@ pub fn write_out(state: &mut ec::State) {
 
 
 /// If `filename` is "", open an empty buffer
-pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
+pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
         prefs_path: PathBuf, state_path: PathBuf) -> i32 {
     let default_prefs = ec::Preferences {
-        show_prompt: !quiet,
+        show_prompt: !pipe_mode,
         color: color,
+        before_context: if pipe_mode {0} else {10},
+        after_context: if pipe_mode {0} else {10},
         ..ec::Preferences::default()
     };
 
@@ -816,9 +819,9 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
         state.prefs = prefs;
     }
 
-    if !quiet {
-        println!("h for help\n");
-        println!("{}", state);
+    if !pipe_mode {
+        println!("{}", Color::Yellow.paint("h for help"));
+        println!("\n{}", state);
         println!();
         state.print_bytes_sans_context(state.range(), false);
     }
@@ -963,7 +966,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
                     /* Toggle showing char representations of bytes */
                     'm' => {
                         state.prefs.show_chars = !state.prefs.show_chars;
-                        if !quiet {
+                        if !pipe_mode {
                             println!("{}", state.prefs.show_chars);
                         }
                     },
@@ -971,7 +974,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
                     /* Toggle showing byte number */
                     'n' => {
                         state.prefs.show_byte_numbers = !state.prefs.show_byte_numbers;
-                        if !quiet {
+                        if !pipe_mode {
                             println!("{}", state.prefs.show_byte_numbers);
                         }
                     },
@@ -979,7 +982,7 @@ pub fn actual_runtime(filename:&str, quiet:bool, color:bool, readonly:bool,
                     /* Toggle color */
                     'o' => {
                         state.prefs.color = !state.prefs.color;
-                        if !quiet {
+                        if !pipe_mode {
                             if state.prefs.color {
                                 println!("{} mode on", state.pretty_color_state());
                             }

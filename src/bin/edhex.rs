@@ -51,16 +51,17 @@ fn main() {
                         "If given -p, those preferences will take precedence\n",
                         "over preferences in <state-filename.json>"))
         )
-        .arg(Arg::with_name("quiet").short("q").long("quiet")
+        .arg(Arg::with_name("pipe-mode").short("P").long("pipe-mode")
                 .takes_value(false).help("Don't print prompts or initial \
-                        help text and state\ne.g. for clean output when \
-                        piping commands in"))
+                        help text and state\nOnly print one line at a time \
+                        until updated with 't' or 'T'\nThis is for clean output \
+                        when piping commands in"))
         .arg(Arg::with_name("filename").required(false).help("Name of file to \
                 be edited.  If not given, a new file will be \
                 created on write"))
         .get_matches();
 
-    let quiet = matches.is_present("quiet");
+    let pipe_mode = matches.is_present("pipe-mode");
     let color = !matches.is_present("nocolor");
     let filename_given = matches.is_present("filename");
     let filename = match matches.value_of("filename") {
@@ -91,6 +92,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    std::process::exit(edhex::actual_runtime(&filename, quiet, color, readonly,
-            prefs_path.to_path_buf(), state_path.to_path_buf()))
+    std::process::exit(edhex::actual_runtime(&filename, pipe_mode, color,
+            readonly, prefs_path.to_path_buf(), state_path.to_path_buf()))
 }
