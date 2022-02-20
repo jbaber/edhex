@@ -1,8 +1,7 @@
 use ansi_term::Color;
-use ec::hex_unless_dec;
 use ec::State;
 use regex::Regex;
-use std::cmp::min;
+use std::collections::HashSet;
 use std::io;
 use std::io::Write;
 use std::num::NonZeroUsize;
@@ -74,6 +73,9 @@ S           (S)ave state to a file except the bytes you're editing.
 t3d         Print 0x3d lines of con(t)extual bytes after current line [Default 0]
 T3d         Print 0x3d lines of con(T)extual bytes before current line [Default 0]
 u           (u)pdate filename to write to
+v           Insert a (v)isual break in the display at the current byte.
+            NOTE: This does not insert a byte in the file.  It's just display.
+V           Remove a (V)isual break if one is at the current byte.
 x           Toggle reading input and displaying output as he(x) or decimal
 w           Actually (w)rite changes to the file on disk
 W3d         Set (W)idth to 0x3d.  i.e. print a linebreak every 3d bytes [Default 0x10]
@@ -112,7 +114,7 @@ impl Command {
         let re_search_again = Regex::new(r"^ *(?P<direction>[/?]) *$").unwrap();
         let re_search_kill = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/k *$").unwrap();
         let re_search_insert = Regex::new(r"^ */(?P<bytes>[0-9a-fA-F]+)/i *$").unwrap();
-        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRrsSlLPuwx]).*$").unwrap();
+        let re_single_char_command = Regex::new(r"^ *(?P<command>[hijkmnopqRrsSlLPuvVwx]).*$").unwrap();
         let re_range = Regex::new(r"^ *(?P<begin>[0-9a-fA-F.$]+) *, *(?P<end>[0-9a-fA-F.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_specified_index = Regex::new(r"^ *(?P<index>[0-9A-Fa-f.$]+) *(?P<the_rest>.*) *$").unwrap();
         let re_offset_index = Regex::new(r"^ *(?P<sign>[-+])(?P<offset>[0-9A-Fa-f]+) *(?P<the_rest>.*) *$").unwrap();
@@ -562,7 +564,7 @@ fn minuses(state:&mut State, num_minuses:usize) -> Result<usize, String> {
     }
     else {
         state.index -= num_minuses;
-        state.print_bytes();
+        state.print_bytes(true);
         Ok(state.index)
     }
 }
@@ -583,7 +585,7 @@ fn pluses(state:&mut State, num_pluses:usize) -> Result<usize, String> {
                 }
                 else {
                     state.index += num_pluses;
-                    state.print_bytes();
+                    state.print_bytes(true);
                     Ok(state.index)
                 }
             },
@@ -786,6 +788,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
             filename: filename.to_owned(),
             readonly: readonly,
             index: 0,
+            breaks: HashSet::new(),
             all_bytes: if filename == "" {
                 Vec::new()
             }
@@ -823,7 +826,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
         println!("{}", Color::Yellow.paint("h for help"));
         println!("\n{}", state);
         println!();
-        state.print_bytes();
+        state.print_bytes(true);
     }
 
     // TODO Below here should be a function called main_loop()
@@ -854,7 +857,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                     'g' => {
                         match ec::move_to(&mut state, command.range.0) {
                             Ok(_) => {
-                                state.print_bytes();
+                                state.print_bytes(true);
                             },
                             Err(error) => {
                                 println!("? ({})", error);
@@ -907,8 +910,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                                 }
                                 state.all_bytes = new;
                                 state.unsaved_changes = true;
-                                state.print_bytes_sans_context(state.range(),
-                                        false);
+                                state.print_bytes_sans_context(state.range());
                             },
                             Err(error) => {
                                 println!("? ({})", error);
@@ -932,7 +934,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                         let first_byte_to_show_index =
                                 state.index.saturating_sub(width);
                         state.index = first_byte_to_show_index;
-                        state.print_bytes();
+                        state.print_bytes(true);
                     }
 
 
@@ -949,7 +951,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                         state.all_bytes.append(&mut right_half);
                         state.index = command.range.0;
                         state.unsaved_changes = true;
-                        state.print_bytes();
+                        state.print_bytes(true);
                     },
 
 
@@ -993,6 +995,16 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                     },
 
 
+                    /* Insert a break in the display at current byte */
+                    'v' => {
+                        state.breaks.insert(state.index);
+                    },
+
+                    /* Remove a break in the display at current byte */
+                    'V' => {
+                        state.breaks.remove(&state.index);
+                    },
+
                     /* Toggle hex/dec */
                     'x' => {
                         state.prefs.radix = if state.prefs.radix == 16 {
@@ -1010,27 +1022,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                             continue;
                         };
 
-                        match state.max_index() {
-                            Ok(max) => {
-                                let width = usize::from(state.prefs.width);
-                                let first_byte_to_show_index = state.index + width;
-                                let last_byte_to_show_index = min(
-                                        first_byte_to_show_index + width - 1,
-                                                max);
-                                if first_byte_to_show_index > max {
-                                    println!("? (already showing last byte at index {})",
-                                            hex_unless_dec(last_byte_to_show_index,
-                                                    state.prefs.radix));
-                                }
-                                else {
-                                    state.index = first_byte_to_show_index;
-                                    state.print_bytes();
-                                }
-                            },
-                            Err(error) => {
-                                println!("? ({})", error);
-                            }
-                        }
+                        state.move_index_then_print_bytes();
                     }
 
                     /* Print byte(s) at one place, width long */
@@ -1042,7 +1034,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
 
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
-                        state.print_bytes();
+                        state.print_bytes_and_move_index();
                     },
 
                     /* Print byte(s) with range */
@@ -1054,12 +1046,14 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
 
                         skip_bad_range!(command, state.all_bytes);
                         state.index = command.range.0;
-                        if state.print_bytes_sans_context((command.range.0,
-                                command.range.1), false).is_some() {
-                            state.index = command.range.0;
+                        if let Some(new_index) =
+                                state.print_bytes_sans_context(
+                                (command.range.0, command.range.1)) {
+                            state.index = new_index;
                         }
                         else {
-                            println!("? (bad range {:?}", command.range);
+                            println!("? (no bytes in range {:?})",
+                                    command.range);
                         }
                     },
 
@@ -1083,7 +1077,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                             continue;
                         };
 
-                        state.print_bytes();
+                        state.print_bytes(true);
                     },
 
                     /* Quit */
