@@ -1,4 +1,3 @@
-- Add context to new print_bytes
 - Handle things like "$-10"
 - docs.rs documentation
 - Implement printing only a screenful at a time (real ed doesn't bother to do this)
