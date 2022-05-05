@@ -24,6 +24,9 @@ macro_rules! skip_bad_range {
     };
 }
 
+static DEFAULT_BEFORE_CONTEXT:usize = 10;
+static DEFAULT_AFTER_CONTEXT:usize= 10;
+
 
 #[derive(Debug)]
 struct Command {
@@ -33,7 +36,7 @@ struct Command {
 }
 
 
-fn print_help() {
+fn print_help(state:&State) {
     print!("Input/output is hex unless toggled to decimal with 'x'
 h           This (h)elp
 <Enter>     Print current byte(s) and move forward to next line of byte(s)
@@ -70,8 +73,8 @@ r           (r)ead preferences from a file.
 R           Toggle (R)ead-only mode
 s           Print (s)tate of toggles, 'W'idth, etc.
 S           (S)ave state to a file except the bytes you're editing.
-t3d         Print 0x3d lines of con(t)extual bytes after current line [Default 0]
-T3d         Print 0x3d lines of con(T)extual bytes before current line [Default 0]
+t3d         Print 0x3d lines of con(t)extual bytes after current line [Default {}]
+T3d         Print 0x3d lines of con(T)extual bytes before current line [Default {}]
 u           (u)pdate filename to write to
 U           Toggle (U)nderlining main line
 v           Insert a (v)isual break in the display at the current byte.
@@ -79,9 +82,13 @@ v           Insert a (v)isual break in the display at the current byte.
 V           Remove a (V)isual break if one is at the current byte.
 x           Toggle reading input and displaying output as he(x) or decimal
 w           Actually (w)rite changes to the file on disk
-W3d         Set (W)idth to 0x3d.  i.e. print a linebreak every 3d bytes [Default 0x10]
+W3d         Set (W)idth to 0x3d.  i.e. print a linebreak every 3d bytes [Default {}]
 q           (q)uit
-");
+",
+    ec::hex_unless_dec_with_radix(DEFAULT_BEFORE_CONTEXT, state.prefs.radix),
+    ec::hex_unless_dec_with_radix(DEFAULT_AFTER_CONTEXT, state.prefs.radix),
+    ec::hex_unless_dec_with_radix(ec::DEFAULT_WIDTH, state.prefs.radix)
+);
 }
 
 fn read_bytes_from_user() -> Result<Vec<u8>, String> {
@@ -773,8 +780,8 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
     let default_prefs = ec::Preferences {
         show_prompt: !pipe_mode,
         color: color,
-        before_context: if pipe_mode {0} else {10},
-        after_context: if pipe_mode {0} else {10},
+        before_context: if pipe_mode {0} else {DEFAULT_BEFORE_CONTEXT},
+        after_context: if pipe_mode {0} else {DEFAULT_AFTER_CONTEXT},
         ..ec::Preferences::default()
     };
 
@@ -922,7 +929,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
 
                     /* Help */
                     'h' => {
-                        print_help();
+                        print_help(&state);
                     },
 
                     /* User wants to go up a line */
