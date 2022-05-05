@@ -625,12 +625,13 @@ pub fn load_state_from_file(state: &mut ec::State) {
     let filename = ec::read_string_from_user(Some(
                     "Enter filename from which to load state: "));
     if filename.is_ok() {
-        let new_state = State::read_from_filename(&filename.unwrap());
-        if new_state.is_ok() {
-            *state = new_state.unwrap();
-        }
-        else {
-            println!("? {:?}", new_state);
+        match State::read_from_filename(&filename.unwrap()) {
+            Ok(new_state) => {
+                *state = new_state;
+            },
+            Err(err) => {
+                println!("? {}", err);
+            }
         }
     }
     else {

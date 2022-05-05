@@ -3,3 +3,4 @@
 - Allow placing notes are locations in the bytes.
 - Use cross platform colors so when compiled with mingw, still get terminal colors
   - vihex may handle this
+- Make l/L take filename as an argument
