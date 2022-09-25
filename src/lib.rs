@@ -206,7 +206,7 @@ impl Command {
         else if is_search_insert {
             match ec::bytes_from_string(caps.unwrap().name("bytes").unwrap().as_str()) {
                 Ok(needle) => {
-                    if let Some(offset) = ec::index_of_bytes(&needle, &state.all_bytes[state.index..], true) {
+                    if let Some(offset) = ec::index_of_bytes(&needle, &state.get_bytes()[state.index..], true) {
                         Ok(Command{
                             range: (state.index + offset, state.index + offset),
                             command: 'i',
@@ -233,7 +233,7 @@ impl Command {
                         needle.len()
                     };
 
-                    if let Some(offset) = ec::index_of_bytes(&needle, &state.all_bytes[state.index..], true) {
+                    if let Some(offset) = ec::index_of_bytes(&needle, &state.get_bytes()[state.index..], true) {
                         Ok(Command{
                             range: (state.index + offset, state.index + offset + needle_num_bytes - 1),
                             command: 'k',
@@ -262,10 +262,10 @@ impl Command {
 
             /* Notice looking after current byte */
             let haystack = if forward {
-                &state.all_bytes[(state.index + 1)..]
+                &state.get_bytes()[(state.index + 1)..]
             }
             else {
-                &state.all_bytes[..(state.index.saturating_sub(1))]
+                &state.get_bytes()[..(state.index.saturating_sub(1))]
             };
 
             if let Some(offset) = ec::index_of_bytes(&needle, haystack, forward) {
@@ -297,10 +297,10 @@ impl Command {
                     state.last_search = Some(needle.to_owned());
 
                     let haystack = if forward {
-                        &state.all_bytes[state.index..]
+                        &state.get_bytes()[state.index..]
                     }
                     else {
-                        &state.all_bytes[..state.index]
+                        &state.get_bytes()[..state.index]
                     };
                     if let Some(offset) = ec::index_of_bytes(&needle, haystack, forward) {
                         if forward {
@@ -684,9 +684,14 @@ pub fn load_new_file(state: &mut ec::State) {
 
     let maybe_all_bytes =
             ec::all_bytes_from_filename(&filename);
+
     if maybe_all_bytes.is_ok() {
-        state.filename = filename;
-        state.all_bytes = maybe_all_bytes.unwrap();
+        if state.set_bytes(maybe_all_bytes.unwrap()).is_err() {
+            println!("? Couldn't set bytes");
+        }
+        else  {
+            state.filename = filename;
+        }
         return;
     }
 
@@ -745,7 +750,7 @@ pub fn write_out(state: &mut ec::State) {
     
     /* Early return if write unsuccessful */
     if state.filename != "" {
-        let result = std::fs::write(&state.filename, &state.all_bytes);
+        let result = std::fs::write(&state.filename, &state.get_bytes());
         if result.is_err() {
             println!("? (Couldn't write to {})", state.filename);
             return;
@@ -760,7 +765,7 @@ pub fn write_out(state: &mut ec::State) {
         let filename = filename.unwrap();
 
         /* filename is a string */
-        let result = std::fs::write(&filename, &state.all_bytes);
+        let result = std::fs::write(&filename, &state.get_bytes());
         if result.is_err() {
             println!("? (Couldn't write to given filename '{}')", filename);
             return;
@@ -791,38 +796,34 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
         maybe_state.unwrap()
     }
     else {
-        ec::State {
-            prefs: default_prefs,
-            unsaved_changes: (filename == ""),
-            filename: filename.to_owned(),
-            readonly: readonly,
-            index: 0,
-            breaks: HashSet::new(),
-            all_bytes: if filename == "" {
-                Vec::new()
+        let mut new_state = ec::State::default();
+        new_state.prefs = default_prefs;
+        new_state.unsaved_changes = (filename == "");
+        new_state.readonly = readonly;
+        new_state
+    };
+    if filename == "" {
+        state.set_bytes(Vec::new());
+    }
+    else {
+        let maybe_all_bytes = ec::all_bytes_from_filename(filename);
+        if maybe_all_bytes.is_ok() {
+            state.set_bytes(maybe_all_bytes.unwrap());
+        }
+        else {
+            match maybe_all_bytes {
+                Err(ec::AllBytesFromFilenameError::NotARegularFile) => {
+                    println!("{} is not a regular file", filename);
+                    return 1;
+                },
+                Err(ec::AllBytesFromFilenameError::FileDoesNotExist) => {
+                    state.set_bytes(Vec::new());
+                },
+                _ => {
+                    println!("Cannot read {}", filename);
+                    return 1;
+                }
             }
-            else {
-                let maybe_all_bytes = ec::all_bytes_from_filename(filename);
-                if maybe_all_bytes.is_ok() {
-                    maybe_all_bytes.unwrap()
-                }
-                else {
-                    match maybe_all_bytes {
-                        Err(ec::AllBytesFromFilenameError::NotARegularFile) => {
-                            println!("{} is not a regular file", filename);
-                            return 1;
-                        },
-                        Err(ec::AllBytesFromFilenameError::FileDoesNotExist) => {
-                            Vec::new()
-                        },
-                        _ => {
-                            println!("Cannot read {}", filename);
-                            return 1;
-                        }
-                    }
-                }
-            },
-            last_search: None,
         }
     };
 
@@ -906,20 +907,24 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                                 // TODO Find the cheapest way to do this (maybe
                                 // make state.all_bytes a better container)
                                 // TODO Do this with split_off
-                                let mut new = Vec::with_capacity(state.all_bytes.len() + entered_bytes.len());
+                                let mut new = Vec::with_capacity(state.get_bytes().len() + entered_bytes.len());
                                 for i in 0..state.index {
-                                    new.push(state.all_bytes[i]);
+                                    new.push(state.get_bytes()[i]);
                                 }
                                 // TODO Could use Vec::splice here
                                 for i in 0..entered_bytes.len() {
                                     new.push(entered_bytes[i]);
                                 }
-                                for i in state.index..state.all_bytes.len() {
-                                    new.push(state.all_bytes[i]);
+                                for i in state.index..state.get_bytes().len() {
+                                    new.push(state.get_bytes()[i]);
                                 }
-                                state.all_bytes = new;
-                                state.unsaved_changes = true;
-                                state.print_bytes_sans_context(state.range());
+                                if state.set_bytes(new).is_ok() {
+                                    state.unsaved_changes = true;
+                                    state.print_bytes_sans_context(state.range());
+                                }
+                                else {
+                                    println!("? Couldn't set bytes");
+                                }
                             },
                             Err(error) => {
                                 println!("? ({})", error);
@@ -954,13 +959,13 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                             println!("? (Empty file");
                             continue;
                         }
-                        skip_bad_range!(command, state.all_bytes);
-                        let mut right_half = state.all_bytes.split_off(command.range.0);
-                        right_half = right_half.split_off(command.range.1 - command.range.0 + 1);
-                        state.all_bytes.append(&mut right_half);
-                        state.index = command.range.0;
-                        state.unsaved_changes = true;
-                        state.print_bytes();
+                        skip_bad_range!(command, state.get_bytes());
+                        if let Err(e) = state.kill_range(command.range) {
+                            println!("? {:?}", e);
+                        }
+                        else {
+                            state.print_bytes();
+                        };
                     },
 
 
@@ -1052,7 +1057,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                             continue;
                         };
 
-                        skip_bad_range!(command, state.all_bytes);
+                        skip_bad_range!(command, state.get_bytes());
                         state.index = command.range.0;
                         state.print_bytes_and_move_index();
                     },
@@ -1064,7 +1069,7 @@ pub fn actual_runtime(filename:&str, pipe_mode:bool, color:bool, readonly:bool,
                             continue;
                         };
 
-                        skip_bad_range!(command, state.all_bytes);
+                        skip_bad_range!(command, state.get_bytes());
                         state.index = command.range.0;
                         if let Some(new_index) =
                                 state.print_bytes_sans_context(
